@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { RINGS, type BodyData, type Fit, type Ring } from './body.ts';
 import { Rig, type Pose } from './rig.ts';
 import type { Surroundings } from './garment.ts';
@@ -16,7 +17,15 @@ export type StagePose = Pose | 'show';
 const SHOW = { distance: 3.2, speed: 1.05, pause: 0.6, turnHalf: 2.2, holdBack: 1.2, holdFront: 1.0 };
 export type { Pose };
 
-const SKIN = 0xe4dbcd;
+/** Тона кожи на выбор (от светлого к тёмному). */
+export const SKIN_TONES = [
+  { name: 'светлый', hex: '#f0d2bf' },
+  { name: 'светло-бежевый', hex: '#e2b597' },
+  { name: 'средний', hex: '#c98f6c' },
+  { name: 'смуглый', hex: '#9c6646' },
+  { name: 'тёмный', hex: '#6a412f' },
+];
+const EYE = { sclera: 0xf2efea, iris: 0x5a3d24, pupil: 0x0b0806 };
 const RING_COLOR = 0x2f4a3a;
 // Цвета зон те же, что в интерфейсе (--ok, --warn, --bad).
 export const TONE_COLOR = { ok: 0x2e7d4f, warn: 0xc98a1b, bad: 0xb3372c } as const;
@@ -43,6 +52,45 @@ function toFloat3(a: THREE.BufferAttribute | THREE.InterleavedBufferAttribute): 
   return out;
 }
 
+/**
+ * Глаза: вершины глазных яблок (вес кости глаза > 0.5) делим на белок, радужку и зрачок
+ * по направлению от центра глаза: вперёд смотрит радужка, в самом центре — зрачок.
+ * 0 — кожа, 1 — белок, 2 — радужка, 3 — зрачок.
+ */
+function eyeMask(mesh: THREE.SkinnedMesh): Uint8Array {
+  const geo = mesh.geometry;
+  const pos = geo.getAttribute('position');
+  const si = geo.getAttribute('skinIndex');
+  const sw = geo.getAttribute('skinWeight');
+  const bones = mesh.skeleton.bones.map((b) => b.name);
+  // Three.js при загрузке убирает точки из имён узлов: eye.L → eyeL.
+  const eyes = ['eye.L', 'eye.R'].map((n) => bones.indexOf(THREE.PropertyBinding.sanitizeNodeName(n))).filter((i) => i >= 0);
+  const n = pos.count;
+  const owner = new Int8Array(n).fill(-1);
+  const sum = eyes.map(() => new THREE.Vector3());
+  const cnt = eyes.map(() => 0);
+  for (let v = 0; v < n; v++) {
+    for (let k = 0; k < 4; k++) {
+      const e = eyes.indexOf(si.getComponent(v, k));
+      if (e >= 0 && sw.getComponent(v, k) > 0.5) {
+        owner[v] = e;
+        sum[e].add(new THREE.Vector3(pos.getX(v), pos.getY(v), pos.getZ(v)));
+        cnt[e]++;
+      }
+    }
+  }
+  const centers = sum.map((s, e) => s.divideScalar(cnt[e] || 1));
+  const out = new Uint8Array(n);
+  const d = new THREE.Vector3();
+  for (let v = 0; v < n; v++) {
+    const e = owner[v];
+    if (e < 0) continue;
+    d.set(pos.getX(v), pos.getY(v), pos.getZ(v)).sub(centers[e]).normalize();
+    out[v] = d.z > 0.965 ? 3 : d.z > 0.86 ? 2 : 1;
+  }
+  return out;
+}
+
 export async function loadBody(url: string): Promise<LoadedBody> {
   const gltf = await new GLTFLoader().loadAsync(url);
   let mesh: THREE.SkinnedMesh | undefined;
@@ -53,12 +101,14 @@ export async function loadBody(url: string): Promise<LoadedBody> {
   const geo = mesh.geometry;
   const dict = mesh.morphTargetDictionary ?? {};
   const names = Object.keys(dict).sort((a, b) => dict[a] - dict[b]);
-  // Цвет кожи и подсветка зон живут в цвете вершин, материал белый.
-  mesh.material = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.72, metalness: 0 });
-  const skin = new THREE.Color(SKIN);
-  const colors = new Float32Array(geo.attributes.position.count * 3);
-  for (let i = 0; i < colors.length; i += 3) colors.set([skin.r, skin.g, skin.b], i);
-  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  // Цвет кожи, глаза и подсветка зон живут в цвете вершин, материал белый.
+  // Кожа: физическая модель с бархатистым отблеском (sheen) — как у живой кожи, не пластик.
+  mesh.material = new THREE.MeshPhysicalMaterial({
+    color: 0xffffff, vertexColors: true, roughness: 0.52, metalness: 0,
+    sheen: 0.55, sheenRoughness: 0.45, sheenColor: new THREE.Color(0xffb8a8), specularIntensity: 0.4,
+  });
+  geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count * 3), 3));
+  mesh.userData.eyes = eyeMask(mesh);
   mesh.castShadow = true;
   mesh.removeFromParent();
   return {
@@ -110,20 +160,30 @@ export class Stage {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFShadowMap;
+    // Мягкие тени (дисперсионные карты): края тени размыты, как от студийного софтбокса.
+    this.renderer.shadowMap.type = THREE.VSMShadowMap;
     this.renderer.toneMapping = THREE.NeutralToneMapping;
     host.prepend(this.renderer.domElement);
 
-    this.scene.add(new THREE.HemisphereLight(0xfffaf2, 0xcfc4b2, 1.9));
-    const key = new THREE.DirectionalLight(0xffffff, 1.6);
+    // Студийное окружение: отражения и рассеянный свет со всех сторон, как в фотостудии.
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    this.scene.environmentIntensity = 0.55;
+    pmrem.dispose();
+
+    this.scene.add(new THREE.HemisphereLight(0xfffaf2, 0xcfc4b2, 0.9));
+    const key = new THREE.DirectionalLight(0xfff4e8, 2.1);
     key.position.set(1.2, 3, 2.2);
     key.castShadow = true;
     // Тень и на всей дорожке подиума.
     key.shadow.mapSize.set(2048, 2048);
     Object.assign(key.shadow.camera, { left: -3, right: 3, top: 3, bottom: -3, near: 0.5, far: 12 });
-    key.shadow.bias = -0.0005;
+    key.shadow.bias = -0.0004;
+    key.shadow.radius = 7;
+    key.shadow.blurSamples = 16;
     this.scene.add(key, key.target);
-    const rim = new THREE.DirectionalLight(0xfff3e0, 0.7);
+    // Контровой холодный свет сзади-сбоку: отделяет силуэт от фона.
+    const rim = new THREE.DirectionalLight(0xe8f0ff, 1.1);
     rim.position.set(-2, 2.5, -2);
     this.scene.add(rim);
 
@@ -232,17 +292,32 @@ export class Stage {
     for (const r of RINGS) this.rings.get(r)!.visible = !this.zones[r] && this.pose === 'stand' && !this.dressed;
   }
 
+  private skinTone = SKIN_TONES[1].hex;
+
+  setSkinTone(hex: string): void {
+    this.skinTone = hex;
+    this.paint();
+  }
+
   private paint(): void {
     const body = this.rig?.meshes[0];
     if (!body || !this.weights) return;
     const attr = body.geometry.getAttribute('color') as THREE.BufferAttribute;
     const c = attr.array as Float32Array;
-    const skin = new THREE.Color(SKIN);
+    const skin = new THREE.Color(this.skinTone);
+    const eyes = body.userData.eyes as Uint8Array | undefined;
+    const eyeCol = [null, new THREE.Color(EYE.sclera), new THREE.Color(EYE.iris), new THREE.Color(EYE.pupil)];
     const tones = RINGS.map((r) => {
       const z = this.zones[r];
       return z ? { w: this.weights![r], color: new THREE.Color(TONE_COLOR[z.tone]) } : null;
     });
     for (let v = 0; v < attr.count; v++) {
+      const e = eyes?.[v] ?? 0;
+      if (e) {
+        const ec = eyeCol[e]!;
+        c[v * 3] = ec.r; c[v * 3 + 1] = ec.g; c[v * 3 + 2] = ec.b;
+        continue;
+      }
       let r = skin.r, g = skin.g, b = skin.b;
       for (const t of tones) {
         const k = t ? t.w[v] * TINT : 0;

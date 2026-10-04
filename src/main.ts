@@ -5,7 +5,7 @@ import { ZONE_NAME, chipLabel, evaluate, sizeName, zoneLabel, type Category, typ
 import { Garment, type Look } from './garment.ts';
 import { badgePrint, placketPrint } from './fabrics.ts';
 import { loadPhoto, type PhotoPrint } from './photo.ts';
-import { TONE_COLOR } from './stage.ts';
+import { SKIN_TONES, TONE_COLOR } from './stage.ts';
 import itemsJson from './data/items.json';
 
 const ITEMS = itemsJson as Item[];
@@ -81,11 +81,13 @@ interface Saved {
   custom: Category;
   /** Красить посадку цветом поверх ткани. */
   tint: boolean;
+  /** Тон кожи манекена: индекс в SKIN_TONES. */
+  skin: number;
 }
 
 function loadSaved(): Saved {
   const fallback: Saved = {
-    gender: 'female', figures: structuredClone(DEFAULTS), item: ITEMS[0].id, colors: {}, custom: 'top', tint: false,
+    gender: 'female', figures: structuredClone(DEFAULTS), item: ITEMS[0].id, colors: {}, custom: 'top', tint: false, skin: 1,
   };
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -102,6 +104,7 @@ function loadSaved(): Saved {
       colors: typeof s.colors === 'object' && s.colors ? s.colors : {},
       custom: s.custom && s.custom in CATEGORY_NAME ? s.custom : 'top',
       tint: s.tint === true,
+      skin: Number.isInteger(s.skin) && s.skin >= 0 && s.skin < SKIN_TONES.length ? s.skin : 1,
     };
   } catch {
     return fallback;
@@ -604,6 +607,33 @@ document.querySelectorAll<HTMLButtonElement>('[data-view]').forEach((b) => {
     // Нет хранилища или битая картинка: без фото.
   }
 })();
+
+// Тон кожи: кружки под ползунками фигуры.
+const skinRow = document.getElementById('skin')!;
+function renderSkin(): void {
+  skinRow.replaceChildren();
+  const label = document.createElement('span');
+  label.className = 'colors-label';
+  label.textContent = `Тон кожи: ${SKIN_TONES[state.skin].name}`;
+  skinRow.append(label);
+  SKIN_TONES.forEach((t, i) => {
+    const b = document.createElement('button');
+    b.className = 'swatch';
+    b.style.background = t.hex;
+    b.title = t.name;
+    b.setAttribute('aria-label', `Тон кожи: ${t.name}`);
+    b.setAttribute('aria-pressed', String(i === state.skin));
+    b.addEventListener('click', () => {
+      state.skin = i;
+      save(state);
+      stage.setSkinTone(t.hex);
+      renderSkin();
+    });
+    skinRow.append(b);
+  });
+}
+renderSkin();
+stage.setSkinTone(SKIN_TONES[state.skin].hex);
 
 showGender(state.gender);
 
