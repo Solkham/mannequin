@@ -317,6 +317,7 @@ function renderExtras(): void {
 
 let garment: Garment | null = null;
 let garmentKey = '';
+let garmentRig: Rig | null = null;
 let lookKey = '';
 let shownSize: SizeFit | null = null;
 let shownTints: Partial<Record<Ring, number>> = {};
@@ -346,10 +347,12 @@ function dressUp(): void {
     return;
   }
   const key = `${state.gender}:${item.category}`;
-  if (!garment || key !== garmentKey) {
+  // Вещь живёт на скелете конкретной фигуры: сменился пол — шьём заново.
+  if (!garment || key !== garmentKey || garmentRig !== current.rig) {
     garment?.dispose();
     garment = new Garment(current.rig, current.meta.parts, item.category);
     garmentKey = key;
+    garmentRig = current.rig;
     lookKey = '';
   }
   const g = garment;
@@ -451,6 +454,8 @@ async function showGender(gender: Gender): Promise<void> {
     b.setAttribute('aria-pressed', String(b.dataset.gender === gender));
   });
   syncInputs();
+  // Пока грузится новая фигура, старую не одеваем.
+  current = null;
   renderItems();
   pickedSize = null;
   renderVerdict();
