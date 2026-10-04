@@ -25,9 +25,11 @@ export interface Shape {
 type Axis = keyof Shape;
 const AXES: Axis[] = ['height', 'weight', 'chest', 'waist', 'hips'];
 
-/** Что получилось на манекене: см и кг, плюс точки обхватов для отрисовки. */
+/** Что получилось на манекене: см и кг, плюс геометрия в осях манекена без масштаба. */
 export interface Measures extends Figure {
-  minY: number;
+  /** Низ, верх и самая задняя точка сетки в покое (м, без масштаба). */
+  rest: { minY: number; maxY: number; minZ: number };
+  /** Кольца обхватов в покое: высота и точки выпуклой оболочки (x, z), м без масштаба. */
   hulls: Record<Ring, { y: number; points: [number, number][] }>;
 }
 
@@ -121,9 +123,11 @@ export class BodyModel {
 
     let minY = Infinity;
     let maxY = -Infinity;
+    let minZ = Infinity;
     for (let i = 1; i < p.length; i += 3) {
       if (p[i] < minY) minY = p[i];
       if (p[i] > maxY) maxY = p[i];
+      if (p[i + 1] < minZ) minZ = p[i + 1];
     }
 
     let vol = 0;
@@ -148,7 +152,7 @@ export class BodyModel {
         y += p[i + 1];
       }
       const hull = convexHull(pts);
-      hulls[r] = { y: (y / ids.length - minY) * scale, points: hull.map(([x, z]) => [x * scale, z * scale]) };
+      hulls[r] = { y: y / ids.length, points: hull };
       perim[r] = perimeter(hull) * scale * 100;
     }
 
@@ -158,7 +162,7 @@ export class BodyModel {
       chest: perim.chest,
       waist: perim.waist,
       hips: perim.hips,
-      minY: minY * scale,
+      rest: { minY, maxY, minZ },
       hulls,
     };
   }

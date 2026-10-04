@@ -1,5 +1,6 @@
 import { BodyModel, ZERO_SHAPE, zoneWeights, type Figure, type Fit, type Gender, type Ring, type Shape } from './body.ts';
-import { Stage, loadBody, type LoadedBody, type Tone, type View, type Zones } from './stage.ts';
+import { Stage, loadBody, type LoadedBody, type Pose, type Tone, type View, type Zones } from './stage.ts';
+import { Rig, type BonesMeta } from './rig.ts';
 import { ZONE_NAME, chipLabel, evaluate, sizeName, zoneLabel, type Item, type Status } from './sizing.ts';
 import itemsJson from './data/items.json';
 
@@ -92,10 +93,18 @@ function syncInputs(): void {
 // Модели: грузим по требованию и держим обе в памяти
 interface Body extends LoadedBody {
   model: BodyModel;
+  rig: Rig;
+  meta: GenderMeta;
   shape: Shape;
   weights: Record<Ring, Float32Array>;
 }
-let meta: { density: number; genders: Record<Gender, { file: string; rings: BodyModel['data']['rings'] }> } | null = null;
+interface GenderMeta {
+  file: string;
+  rings: BodyModel['data']['rings'];
+  parts: string;
+  bones: BonesMeta;
+}
+let meta: { density: number; partNames: string[]; genders: Record<Gender, GenderMeta> } | null = null;
 const bodies = new Map<Gender, Promise<Body>>();
 
 function getBody(gender: Gender): Promise<Body> {
@@ -106,7 +115,9 @@ function getBody(gender: Gender): Promise<Body> {
       const g = meta!.genders[gender];
       const loaded = await loadBody(`${MODELS}${g.file}`);
       const model = new BodyModel({ ...loaded.data, rings: g.rings, density: meta!.density });
-      return { ...loaded, model, shape: { ...ZERO_SHAPE }, weights: zoneWeights({ base: loaded.data.base, rings: g.rings }) };
+      const weights = zoneWeights({ base: loaded.data.base, rings: g.rings });
+      const rig = new Rig(loaded.mesh, g.bones);
+      return { ...loaded, model, rig, meta: g, shape: { ...ZERO_SHAPE }, weights };
     })();
     bodies.set(gender, p);
   }
@@ -253,7 +264,7 @@ async function showGender(gender: Gender): Promise<void> {
     const body = await getBody(gender);
     if (state.gender !== gender) return;
     current = body;
-    stage.setBody(body.mesh, body.weights);
+    stage.setBody(body.rig, body.data.names, body.weights);
     refit();
     loading.hidden = true;
   } catch (e) {
@@ -264,6 +275,13 @@ async function showGender(gender: Gender): Promise<void> {
 
 document.querySelectorAll<HTMLButtonElement>('[data-gender]').forEach((b) => {
   b.addEventListener('click', () => showGender(b.dataset.gender as Gender));
+});
+
+document.querySelectorAll<HTMLButtonElement>('[data-pose]').forEach((b) => {
+  b.addEventListener('click', () => {
+    stage.setPose(b.dataset.pose as Pose);
+    document.querySelectorAll('[data-pose]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+  });
 });
 
 document.querySelectorAll<HTMLButtonElement>('[data-view]').forEach((b) => {

@@ -15,10 +15,17 @@
 <main>
   <section class="card stage" id="stage" aria-label="Манекен">
     <p class="loading" id="loading">Загружаю манекен…</p>
-    <p class="stage-label">Подсветка показывает, где вещь будет тесной или свободной. Цвет всегда дублируется словом.</p>
-    <div class="stage-actions" role="group" aria-label="Ракурс">
+    <div class="stage-bar stage-poses" role="group" aria-label="Поза">
+      <button class="chip" data-pose="stand" aria-pressed="true">Стоит</button>
+      <button class="chip" data-pose="walk" aria-pressed="false">Идёт</button>
+      <button class="chip" data-pose="sit" aria-pressed="false">Сидит</button>
+      <button class="chip" data-pose="lie" aria-pressed="false">Лежит</button>
+    </div>
+    <div class="stage-bar stage-actions" role="group" aria-label="Ракурс">
       <button class="chip" data-view="front" aria-pressed="true">Спереди</button>
-      <button class="chip" data-view="side" aria-pressed="false">Сбоку</button>
+      <button class="chip" data-view="back" aria-pressed="false">Сзади</button>
+      <button class="chip" data-view="left" aria-pressed="false">Слева</button>
+      <button class="chip" data-view="right" aria-pressed="false">Справа</button>
     </div>
   </section>
 
