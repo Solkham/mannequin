@@ -132,14 +132,32 @@ def build_model() -> anny.Anny:
     )
 
 
-def rest_vertices(model, gender: float, **over) -> np.ndarray:
+def rest_shape(model, gender: float, **over) -> tuple[np.ndarray, np.ndarray]:
+    """Вершины и головы костей в позе покоя (A-поза) для заданного фенотипа."""
     phen = {k: 0.5 for k in model.phenotype_labels}
     phen.update(gender=gender, age=AGE_ADULT)
     local = {LOCAL[k[len("local_"):]]: over.pop(k) for k in list(over) if k.startswith("local_")}
     phen.update(over)
     with torch.no_grad():
         out = model(phenotype_kwargs=phen, local_changes_kwargs=local or None)
-    return out["rest_vertices"][0].double().cpu().numpy()
+    return (out["rest_vertices"][0].double().cpu().numpy(),
+            out["rest_bone_heads"][0].double().cpu().numpy())
+
+
+def rest_vertices(model, gender: float, **over) -> np.ndarray:
+    return rest_shape(model, gender, **over)[0]
+
+
+def skin_weights(model) -> tuple[np.ndarray, np.ndarray]:
+    """4 самые сильные кости на вершину (столько понимает Three.js), веса нормированы."""
+    w = model.vertex_bone_weights.cpu().numpy()
+    idx = model.vertex_bone_indices.cpu().numpy()
+    order = np.argsort(-w, axis=1)[:, :4]
+    w4 = np.take_along_axis(w, order, axis=1)
+    j4 = np.take_along_axis(idx, order, axis=1)
+    w4 /= w4.sum(axis=1, keepdims=True).clip(1e-9)
+    j4[w4 == 0] = 0
+    return j4.astype(np.uint8), w4.astype(np.float32)
 
 
 def to_gltf_axes(v: np.ndarray, forward_sign: float) -> np.ndarray:
@@ -203,7 +221,9 @@ def find_rings(model, v: np.ndarray) -> dict[str, list[int]]:
 
 
 def write_glb(path: Path, base: np.ndarray, normals: np.ndarray, faces: np.ndarray,
-              targets: list[tuple[str, np.ndarray, np.ndarray]]) -> None:
+              targets: list[tuple[str, np.ndarray, np.ndarray]],
+              skin: tuple[np.ndarray, np.ndarray, list[str], list[int], np.ndarray]) -> None:
+    """skin: (joints Vx4, weights Vx4, имена костей, родители, головы костей Bx3)."""
     blobs: list[bytes] = []
     views, accessors = [], []
 
@@ -223,9 +243,17 @@ def write_glb(path: Path, base: np.ndarray, normals: np.ndarray, faces: np.ndarr
         accessors.append(acc)
         return len(accessors) - 1
 
-    FLOAT, U16, U32 = 5126, 5123, 5125
+    FLOAT, U8, U16, U32 = 5126, 5121, 5123, 5125
     pos = add(base.astype(np.float32), FLOAT, "VEC3", 34962, minmax=True)
     nor = add(normals.astype(np.float32), FLOAT, "VEC3", 34962)
+    joints, weights, bone_names, parents, heads = skin
+    jnt = add(joints, U8, "VEC4", 34962)
+    wgt = add(weights, FLOAT, "VEC4", 34962)
+    # Кости без поворота, только сдвиг от родителя: локальные оси = мировые.
+    ibm = np.tile(np.eye(4, dtype=np.float32), (len(heads), 1, 1))
+    ibm[:, 3, :3] = -heads  # столбцовый порядок glTF: перенос в последнем столбце
+    ibm_acc = add(ibm.reshape(len(heads), 16), FLOAT, None, None)
+    accessors[ibm_acc]["type"] = "MAT4"
     if faces.max() < 65535:
         idx = add(faces.astype(np.uint16).reshape(-1), U16, "SCALAR", 34963)
     else:
@@ -243,11 +271,20 @@ def write_glb(path: Path, base: np.ndarray, normals: np.ndarray, faces: np.ndarr
         "asset": {"version": "2.0", "generator": "mannequin/scripts/export_anny.py",
                   "copyright": "Anny body model (c) NAVER Corp., Apache-2.0; based on MakeHuman (CC0)"},
         "scene": 0,
-        "scenes": [{"nodes": [0]}],
-        "nodes": [{"name": path.stem, "mesh": 0}],
+        "scenes": [{"nodes": [0] + [1 + i for i, p in enumerate(parents) if p < 0]}],
+        "nodes": [{"name": path.stem, "mesh": 0, "skin": 0}] + [
+            {"name": n,
+             "translation": (heads[i] - (heads[parents[i]] if parents[i] >= 0 else 0)).tolist(),
+             **({"children": [1 + c for c, p in enumerate(parents) if p == i]}
+                if any(p == i for p in parents) else {})}
+            for i, n in enumerate(bone_names)
+        ],
+        "skins": [{"inverseBindMatrices": ibm_acc, "joints": [1 + i for i in range(len(heads))],
+                   "skeleton": 1 + parents.index(-1)}],
         "meshes": [{
             "name": path.stem,
-            "primitives": [{"attributes": {"POSITION": pos, "NORMAL": nor}, "indices": idx,
+            "primitives": [{"attributes": {"POSITION": pos, "NORMAL": nor, "JOINTS_0": jnt, "WEIGHTS_0": wgt},
+                            "indices": idx,
                             "mode": 4, "targets": morph}],
             "weights": [0.0] * len(targets),
             "extras": {"targetNames": names},
@@ -270,7 +307,7 @@ def write_glb(path: Path, base: np.ndarray, normals: np.ndarray, faces: np.ndarr
 
 
 def export_gender(model, name: str, g: float, faces: np.ndarray) -> dict:
-    raw = rest_vertices(model, g)
+    raw, raw_heads = rest_shape(model, g)
 
     # Куда смотрит лицо: носки стоп впереди пяток.
     toes = bone_mask(model, ("toe",)) > 0.5
@@ -285,6 +322,7 @@ def export_gender(model, name: str, g: float, faces: np.ndarray) -> dict:
     # браузер после смешивания ещё раз ставит модель на пол.
     shift = np.array([base[:, 0].mean(), base[:, 1].min(), base[:, 2].mean()])
     base -= shift
+    heads = prep(raw_heads) - shift
     base_n = vertex_normals(base, faces)
 
     variants = {
@@ -295,12 +333,17 @@ def export_gender(model, name: str, g: float, faces: np.ndarray) -> dict:
         "hips_up": dict(local_hips=1.0), "hips_down": dict(local_hips=-1.0),
     }
     targets = []
+    head_deltas = {}
     for tname, over in variants.items():
-        v = prep(rest_vertices(model, g, **over)) - shift
+        v, h = rest_shape(model, g, **over)
+        v = prep(v) - shift
         targets.append((tname, v - base, vertex_normals(v, faces) - base_n))
+        head_deltas[tname] = np.round(prep(h) - shift - heads, 5).reshape(-1).tolist()
 
     path = OUT_DIR / f"anny-{name}.glb"
-    write_glb(path, base, base_n, faces, targets)
+    joints, weights = skin_weights(model)
+    parents = [int(p) for p in model.bone_parents]
+    write_glb(path, base, base_n, faces, targets, (joints, weights, list(model.bone_labels), parents, heads))
 
     rings = find_rings(model, base)
     m0 = measure(base, faces, rings)
@@ -317,6 +360,12 @@ def export_gender(model, name: str, g: float, faces: np.ndarray) -> dict:
     return {
         "file": path.name,
         "parts": body_parts(model),
+        "bones": {
+            "names": list(model.bone_labels),
+            "parents": parents,
+            "heads": np.round(heads, 5).reshape(-1).tolist(),
+            "headDeltas": head_deltas,
+        },
         "targets": [t[0] for t in targets],
         "rings": rings,
         "base": {k: round(v, 5) for k, v in m0.items()},
