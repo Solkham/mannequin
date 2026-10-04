@@ -50,8 +50,11 @@ LOCAL = {
     "hips": "measure-hips-circ-incr",
 }
 
-# Плотность тела в Anny (anthropometry.py): масса = объём * 980 кг/м³.
-DENSITY = 980.0
+# Вес манекена = объём сетки * плотность. В Anny (anthropometry.py) стоит 980 кг/м³,
+# но с ней средние фигуры (168 см, 92-74-100) выходят на 4-5 кг легче живых людей
+# с теми же обхватами. 1040 подобрано так, чтобы средним фигурам не нужно было
+# раздувать морф веса. Это калибровка, а не физика.
+DENSITY = 1040.0
 
 ARM_BONE_KEYS = ("arm", "shoulder", "wrist", "finger", "metacarpal", "hand")
 LEG_BONE_KEYS = ("upperleg", "lowerleg", "foot", "toe")
@@ -125,8 +128,11 @@ def rest_vertices(model, gender: float, **over) -> np.ndarray:
 
 
 def to_gltf_axes(v: np.ndarray, forward_sign: float) -> np.ndarray:
-    """Anny: Z вверх. glTF: Y вверх, лицо смотрит в +Z."""
-    return np.stack([v[:, 0] * forward_sign, v[:, 2], v[:, 1] * forward_sign], axis=1)
+    """Anny: Z вверх, лицо в сторону forward_sign по Y. glTF: Y вверх, лицо в +Z.
+
+    Это поворот (определитель +1), а не отражение: иначе вывернутся грани.
+    """
+    return np.stack([-forward_sign * v[:, 0], v[:, 2], forward_sign * v[:, 1]], axis=1)
 
 
 def bone_mask(model, keys: tuple[str, ...]) -> np.ndarray:
