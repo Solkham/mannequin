@@ -1,0 +1,1116 @@
+[
+ {
+  "id": "tee",
+  "title": "Футболка в полоску",
+  "shop": "Ozon",
+  "material": "хлопок, джерси",
+  "category": "tee",
+  "fabric": "stripes",
+  "stretch": 2,
+  "colors": [
+   {
+    "name": "тёмно-синяя полоска",
+    "hex": "#1f2f57"
+   },
+   {
+    "name": "чёрная полоска",
+    "hex": "#232326"
+   },
+   {
+    "name": "красная полоска",
+    "hex": "#a8322d"
+   }
+  ],
+  "source": "Стандартная российская размерная сетка по обхватам тела.",
+  "charts": {
+   "female": {
+    "kind": "body",
+    "spread": 2,
+    "sizes": [
+     {
+      "label": "42",
+      "alt": "XS",
+      "chest": 84,
+      "waist": 66,
+      "hips": 92
+     },
+     {
+      "label": "44",
+      "alt": "S",
+      "chest": 88,
+      "waist": 70,
+      "hips": 96
+     },
+     {
+      "label": "46",
+      "alt": "M",
+      "chest": 92,
+      "waist": 74,
+      "hips": 100
+     },
+     {
+      "label": "48",
+      "alt": "L",
+      "chest": 96,
+      "waist": 78,
+      "hips": 104
+     },
+     {
+      "label": "50",
+      "alt": "XL",
+      "chest": 100,
+      "waist": 82,
+      "hips": 108
+     },
+     {
+      "label": "52",
+      "alt": "XXL",
+      "chest": 104,
+      "waist": 86,
+      "hips": 112
+     },
+     {
+      "label": "54",
+      "alt": "3XL",
+      "chest": 108,
+      "waist": 90,
+      "hips": 116
+     },
+     {
+      "label": "56",
+      "alt": "4XL",
+      "chest": 112,
+      "waist": 94,
+      "hips": 120
+     },
+     {
+      "label": "58",
+      "alt": "5XL",
+      "chest": 116,
+      "waist": 98,
+      "hips": 124
+     }
+    ]
+   },
+   "male": {
+    "kind": "body",
+    "spread": 2,
+    "sizes": [
+     {
+      "label": "44",
+      "alt": "XS",
+      "chest": 88,
+      "waist": 76
+     },
+     {
+      "label": "46",
+      "alt": "S",
+      "chest": 92,
+      "waist": 80
+     },
+     {
+      "label": "48",
+      "alt": "M",
+      "chest": 96,
+      "waist": 84
+     },
+     {
+      "label": "50",
+      "alt": "L",
+      "chest": 100,
+      "waist": 88
+     },
+     {
+      "label": "52",
+      "alt": "XL",
+      "chest": 104,
+      "waist": 92
+     },
+     {
+      "label": "54",
+      "alt": "XXL",
+      "chest": 108,
+      "waist": 96
+     },
+     {
+      "label": "56",
+      "alt": "3XL",
+      "chest": 112,
+      "waist": 100
+     },
+     {
+      "label": "58",
+      "alt": "4XL",
+      "chest": 116,
+      "waist": 104
+     },
+     {
+      "label": "60",
+      "alt": "5XL",
+      "chest": 120,
+      "waist": 108
+     }
+    ]
+   }
+  }
+ },
+ {
+  "id": "shirt",
+  "title": "Рубашка оксфорд навыпуск",
+  "shop": "Lamoda",
+  "material": "хлопок, оксфорд",
+  "category": "shirt",
+  "fabric": "oxford",
+  "print": "placket",
+  "stretch": 0,
+  "colors": [
+   {
+    "name": "белый",
+    "hex": "#f1f0ea"
+   },
+   {
+    "name": "голубой",
+    "hex": "#a9c3df"
+   },
+   {
+    "name": "розовый",
+    "hex": "#e6c3c6"
+   },
+   {
+    "name": "оливковый",
+    "hex": "#6f7350"
+   }
+  ],
+  "source": "Стандартная российская размерная сетка по обхватам тела.",
+  "charts": {
+   "female": {
+    "kind": "body",
+    "spread": 2,
+    "sizes": [
+     {
+      "label": "42",
+      "alt": "XS",
+      "chest": 84,
+      "waist": 66,
+      "hips": 92
+     },
+     {
+      "label": "44",
+      "alt": "S",
+      "chest": 88,
+      "waist": 70,
+      "hips": 96
+     },
+     {
+      "label": "46",
+      "alt": "M",
+      "chest": 92,
+      "waist": 74,
+      "hips": 100
+     },
+     {
+      "label": "48",
+      "alt": "L",
+      "chest": 96,
+      "waist": 78,
+      "hips": 104
+     },
+     {
+      "label": "50",
+      "alt": "XL",
+      "chest": 100,
+      "waist": 82,
+      "hips": 108
+     },
+     {
+      "label": "52",
+      "alt": "XXL",
+      "chest": 104,
+      "waist": 86,
+      "hips": 112
+     },
+     {
+      "label": "54",
+      "alt": "3XL",
+      "chest": 108,
+      "waist": 90,
+      "hips": 116
+     },
+     {
+      "label": "56",
+      "alt": "4XL",
+      "chest": 112,
+      "waist": 94,
+      "hips": 120
+     }
+    ]
+   },
+   "male": {
+    "kind": "body",
+    "spread": 2,
+    "sizes": [
+     {
+      "label": "44",
+      "alt": "XS",
+      "chest": 88,
+      "waist": 76
+     },
+     {
+      "label": "46",
+      "alt": "S",
+      "chest": 92,
+      "waist": 80
+     },
+     {
+      "label": "48",
+      "alt": "M",
+      "chest": 96,
+      "waist": 84
+     },
+     {
+      "label": "50",
+      "alt": "L",
+      "chest": 100,
+      "waist": 88
+     },
+     {
+      "label": "52",
+      "alt": "XL",
+      "chest": 104,
+      "waist": 92
+     },
+     {
+      "label": "54",
+      "alt": "XXL",
+      "chest": 108,
+      "waist": 96
+     },
+     {
+      "label": "56",
+      "alt": "3XL",
+      "chest": 112,
+      "waist": 100
+     },
+     {
+      "label": "58",
+      "alt": "4XL",
+      "chest": 116,
+      "waist": 104
+     },
+     {
+      "label": "60",
+      "alt": "5XL",
+      "chest": 120,
+      "waist": 108
+     }
+    ]
+   }
+  }
+ },
+ {
+  "id": "tunic",
+  "title": "Туника льняная",
+  "shop": "Lamoda",
+  "material": "лён",
+  "category": "tunic",
+  "fabric": "knit",
+  "stretch": 1,
+  "colors": [
+   {
+    "name": "молочный",
+    "hex": "#ece5d6"
+   },
+   {
+    "name": "терракотовый",
+    "hex": "#b4573e"
+   },
+   {
+    "name": "оливковый",
+    "hex": "#6f7350"
+   },
+   {
+    "name": "синий",
+    "hex": "#34507a"
+   }
+  ],
+  "source": "Стандартная российская размерная сетка по обхватам тела.",
+  "charts": {
+   "female": {
+    "kind": "body",
+    "spread": 2,
+    "sizes": [
+     {
+      "label": "42",
+      "alt": "XS",
+      "chest": 84,
+      "waist": 66,
+      "hips": 92
+     },
+     {
+      "label": "44",
+      "alt": "S",
+      "chest": 88,
+      "waist": 70,
+      "hips": 96
+     },
+     {
+      "label": "46",
+      "alt": "M",
+      "chest": 92,
+      "waist": 74,
+      "hips": 100
+     },
+     {
+      "label": "48",
+      "alt": "L",
+      "chest": 96,
+      "waist": 78,
+      "hips": 104
+     },
+     {
+      "label": "50",
+      "alt": "XL",
+      "chest": 100,
+      "waist": 82,
+      "hips": 108
+     },
+     {
+      "label": "52",
+      "alt": "XXL",
+      "chest": 104,
+      "waist": 86,
+      "hips": 112
+     },
+     {
+      "label": "54",
+      "alt": "3XL",
+      "chest": 108,
+      "waist": 90,
+      "hips": 116
+     },
+     {
+      "label": "56",
+      "alt": "4XL",
+      "chest": 112,
+      "waist": 94,
+      "hips": 120
+     },
+     {
+      "label": "58",
+      "alt": "5XL",
+      "chest": 116,
+      "waist": 98,
+      "hips": 124
+     }
+    ]
+   }
+  }
+ },
+ {
+  "id": "hoodie",
+  "title": "Худи оверсайз",
+  "shop": "Wildberries",
+  "material": "хлопок, футер",
+  "category": "top",
+  "fabric": "knit",
+  "print": "badge",
+  "stretch": 2,
+  "colors": [
+   {
+    "name": "серый меланж",
+    "hex": "#9a9a98"
+   },
+   {
+    "name": "чёрный",
+    "hex": "#2b2b2d"
+   },
+   {
+    "name": "бежевый",
+    "hex": "#cdb89a"
+   },
+   {
+    "name": "оливковый",
+    "hex": "#6f7350"
+   }
+  ],
+  "source": "Стандартная российская сетка, двойные размеры унисекс (S = 42–44).",
+  "charts": {
+   "female": {
+    "kind": "body",
+    "sizes": [
+     {
+      "label": "S",
+      "alt": "42–44",
+      "chest": [
+       82,
+       90
+      ]
+     },
+     {
+      "label": "M",
+      "alt": "46–48",
+      "chest": [
+       90,
+       98
+      ]
+     },
+     {
+      "label": "L",
+      "alt": "50–52",
+      "chest": [
+       98,
+       106
+      ]
+     },
+     {
+      "label": "XL",
+      "alt": "54–56",
+      "chest": [
+       106,
+       114
+      ]
+     },
+     {
+      "label": "2XL",
+      "alt": "58–60",
+      "chest": [
+       114,
+       122
+      ]
+     }
+    ]
+   },
+   "male": {
+    "kind": "body",
+    "sizes": [
+     {
+      "label": "S",
+      "alt": "44–46",
+      "chest": [
+       86,
+       94
+      ]
+     },
+     {
+      "label": "M",
+      "alt": "48–50",
+      "chest": [
+       94,
+       102
+      ]
+     },
+     {
+      "label": "L",
+      "alt": "52–54",
+      "chest": [
+       102,
+       110
+      ]
+     },
+     {
+      "label": "XL",
+      "alt": "56–58",
+      "chest": [
+       110,
+       118
+      ]
+     },
+     {
+      "label": "2XL",
+      "alt": "60–62",
+      "chest": [
+       118,
+       126
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "id": "jeans",
+  "title": "Джинсы прямые",
+  "shop": "Ozon",
+  "material": "деним с эластаном",
+  "category": "bottom",
+  "fabric": "denim",
+  "stretch": 2,
+  "colors": [
+   {
+    "name": "синий",
+    "hex": "#3b5a85"
+   },
+   {
+    "name": "голубой",
+    "hex": "#7d9cc0"
+   },
+   {
+    "name": "чёрный",
+    "hex": "#2c2e33"
+   }
+  ],
+  "source": "Стандартная российская размерная сетка по обхватам тела.",
+  "charts": {
+   "female": {
+    "kind": "body",
+    "spread": 2,
+    "sizes": [
+     {
+      "label": "42",
+      "alt": "XS",
+      "waist": 66,
+      "hips": 92
+     },
+     {
+      "label": "44",
+      "alt": "S",
+      "waist": 70,
+      "hips": 96
+     },
+     {
+      "label": "46",
+      "alt": "M",
+      "waist": 74,
+      "hips": 100
+     },
+     {
+      "label": "48",
+      "alt": "L",
+      "waist": 78,
+      "hips": 104
+     },
+     {
+      "label": "50",
+      "alt": "XL",
+      "waist": 82,
+      "hips": 108
+     },
+     {
+      "label": "52",
+      "alt": "XXL",
+      "waist": 86,
+      "hips": 112
+     },
+     {
+      "label": "54",
+      "alt": "3XL",
+      "waist": 90,
+      "hips": 116
+     },
+     {
+      "label": "56",
+      "alt": "4XL",
+      "waist": 94,
+      "hips": 120
+     }
+    ]
+   },
+   "male": {
+    "kind": "body",
+    "spread": 2,
+    "sizes": [
+     {
+      "label": "44",
+      "alt": "XS",
+      "waist": 76,
+      "hips": 92
+     },
+     {
+      "label": "46",
+      "alt": "S",
+      "waist": 80,
+      "hips": 96
+     },
+     {
+      "label": "48",
+      "alt": "M",
+      "waist": 84,
+      "hips": 100
+     },
+     {
+      "label": "50",
+      "alt": "L",
+      "waist": 88,
+      "hips": 104
+     },
+     {
+      "label": "52",
+      "alt": "XL",
+      "waist": 92,
+      "hips": 108
+     },
+     {
+      "label": "54",
+      "alt": "XXL",
+      "waist": 96,
+      "hips": 112
+     },
+     {
+      "label": "56",
+      "alt": "3XL",
+      "waist": 100,
+      "hips": 116
+     },
+     {
+      "label": "58",
+      "alt": "4XL",
+      "waist": 104,
+      "hips": 120
+     }
+    ]
+   }
+  }
+ },
+ {
+  "id": "shorts",
+  "title": "Шорты чинос",
+  "shop": "Ozon",
+  "material": "хлопок, саржа",
+  "category": "shorts",
+  "fabric": "denim",
+  "stretch": 1,
+  "colors": [
+   {
+    "name": "тёмно-синий",
+    "hex": "#2b3550"
+   },
+   {
+    "name": "хаки",
+    "hex": "#6f7350"
+   },
+   {
+    "name": "бежевый",
+    "hex": "#c8b28c"
+   }
+  ],
+  "source": "Стандартная российская размерная сетка по обхватам тела.",
+  "charts": {
+   "female": {
+    "kind": "body",
+    "spread": 2,
+    "sizes": [
+     {
+      "label": "42",
+      "alt": "XS",
+      "waist": 66,
+      "hips": 92
+     },
+     {
+      "label": "44",
+      "alt": "S",
+      "waist": 70,
+      "hips": 96
+     },
+     {
+      "label": "46",
+      "alt": "M",
+      "waist": 74,
+      "hips": 100
+     },
+     {
+      "label": "48",
+      "alt": "L",
+      "waist": 78,
+      "hips": 104
+     },
+     {
+      "label": "50",
+      "alt": "XL",
+      "waist": 82,
+      "hips": 108
+     },
+     {
+      "label": "52",
+      "alt": "XXL",
+      "waist": 86,
+      "hips": 112
+     },
+     {
+      "label": "54",
+      "alt": "3XL",
+      "waist": 90,
+      "hips": 116
+     },
+     {
+      "label": "56",
+      "alt": "4XL",
+      "waist": 94,
+      "hips": 120
+     }
+    ]
+   },
+   "male": {
+    "kind": "body",
+    "spread": 2,
+    "sizes": [
+     {
+      "label": "44",
+      "alt": "XS",
+      "waist": 76,
+      "hips": 92
+     },
+     {
+      "label": "46",
+      "alt": "S",
+      "waist": 80,
+      "hips": 96
+     },
+     {
+      "label": "48",
+      "alt": "M",
+      "waist": 84,
+      "hips": 100
+     },
+     {
+      "label": "50",
+      "alt": "L",
+      "waist": 88,
+      "hips": 104
+     },
+     {
+      "label": "52",
+      "alt": "XL",
+      "waist": 92,
+      "hips": 108
+     },
+     {
+      "label": "54",
+      "alt": "XXL",
+      "waist": 96,
+      "hips": 112
+     },
+     {
+      "label": "56",
+      "alt": "3XL",
+      "waist": 100,
+      "hips": 116
+     },
+     {
+      "label": "58",
+      "alt": "4XL",
+      "waist": 104,
+      "hips": 120
+     }
+    ]
+   }
+  }
+ },
+ {
+  "id": "skirt",
+  "title": "Юбка в клетку",
+  "shop": "Wildberries",
+  "material": "шерсть",
+  "category": "skirt",
+  "fabric": "plaid",
+  "stretch": 0,
+  "colors": [
+   {
+    "name": "зелёная клетка",
+    "hex": "#2f5a43"
+   },
+   {
+    "name": "красная клетка",
+    "hex": "#9a2e2b"
+   },
+   {
+    "name": "серая клетка",
+    "hex": "#6b6e73"
+   }
+  ],
+  "source": "Стандартная российская размерная сетка по обхватам тела.",
+  "charts": {
+   "female": {
+    "kind": "body",
+    "spread": 2,
+    "sizes": [
+     {
+      "label": "42",
+      "alt": "XS",
+      "waist": 66,
+      "hips": 92
+     },
+     {
+      "label": "44",
+      "alt": "S",
+      "waist": 70,
+      "hips": 96
+     },
+     {
+      "label": "46",
+      "alt": "M",
+      "waist": 74,
+      "hips": 100
+     },
+     {
+      "label": "48",
+      "alt": "L",
+      "waist": 78,
+      "hips": 104
+     },
+     {
+      "label": "50",
+      "alt": "XL",
+      "waist": 82,
+      "hips": 108
+     },
+     {
+      "label": "52",
+      "alt": "XXL",
+      "waist": 86,
+      "hips": 112
+     },
+     {
+      "label": "54",
+      "alt": "3XL",
+      "waist": 90,
+      "hips": 116
+     },
+     {
+      "label": "56",
+      "alt": "4XL",
+      "waist": 94,
+      "hips": 120
+     }
+    ]
+   }
+  }
+ },
+ {
+  "id": "dress",
+  "title": "Платье миди",
+  "shop": "Lamoda",
+  "material": "вискоза",
+  "category": "dress",
+  "fabric": "floral",
+  "stretch": 0,
+  "colors": [
+   {
+    "name": "терракотовый",
+    "hex": "#b4573e"
+   },
+   {
+    "name": "тёмно-синий",
+    "hex": "#27365a"
+   },
+   {
+    "name": "зелёный",
+    "hex": "#3f6b4f"
+   }
+  ],
+  "source": "Стандартная российская размерная сетка по обхватам тела.",
+  "charts": {
+   "female": {
+    "kind": "body",
+    "spread": 2,
+    "sizes": [
+     {
+      "label": "42",
+      "alt": "XS",
+      "chest": 84,
+      "waist": 66,
+      "hips": 92
+     },
+     {
+      "label": "44",
+      "alt": "S",
+      "chest": 88,
+      "waist": 70,
+      "hips": 96
+     },
+     {
+      "label": "46",
+      "alt": "M",
+      "chest": 92,
+      "waist": 74,
+      "hips": 100
+     },
+     {
+      "label": "48",
+      "alt": "L",
+      "chest": 96,
+      "waist": 78,
+      "hips": 104
+     },
+     {
+      "label": "50",
+      "alt": "XL",
+      "chest": 100,
+      "waist": 82,
+      "hips": 108
+     },
+     {
+      "label": "52",
+      "alt": "XXL",
+      "chest": 104,
+      "waist": 86,
+      "hips": 112
+     },
+     {
+      "label": "54",
+      "alt": "3XL",
+      "chest": 108,
+      "waist": 90,
+      "hips": 116
+     },
+     {
+      "label": "56",
+      "alt": "4XL",
+      "chest": 112,
+      "waist": 94,
+      "hips": 120
+     }
+    ]
+   }
+  }
+ },
+ {
+  "id": "puffer",
+  "title": "Пуховик",
+  "shop": "Wildberries",
+  "material": "пух",
+  "category": "outer",
+  "fabric": "quilt",
+  "stretch": 0,
+  "colors": [
+   {
+    "name": "чёрный",
+    "hex": "#232427"
+   },
+   {
+    "name": "оливковый",
+    "hex": "#5d6345"
+   },
+   {
+    "name": "бежевый",
+    "hex": "#c9b394"
+   },
+   {
+    "name": "красный",
+    "hex": "#9e2b2b"
+   }
+  ],
+  "source": "Стандартная российская размерная сетка по обхватам тела.",
+  "charts": {
+   "female": {
+    "kind": "body",
+    "spread": 2,
+    "sizes": [
+     {
+      "label": "42",
+      "alt": "XS",
+      "chest": 84,
+      "hips": 92
+     },
+     {
+      "label": "44",
+      "alt": "S",
+      "chest": 88,
+      "hips": 96
+     },
+     {
+      "label": "46",
+      "alt": "M",
+      "chest": 92,
+      "hips": 100
+     },
+     {
+      "label": "48",
+      "alt": "L",
+      "chest": 96,
+      "hips": 104
+     },
+     {
+      "label": "50",
+      "alt": "XL",
+      "chest": 100,
+      "hips": 108
+     },
+     {
+      "label": "52",
+      "alt": "XXL",
+      "chest": 104,
+      "hips": 112
+     },
+     {
+      "label": "54",
+      "alt": "3XL",
+      "chest": 108,
+      "hips": 116
+     },
+     {
+      "label": "56",
+      "alt": "4XL",
+      "chest": 112,
+      "hips": 120
+     },
+     {
+      "label": "58",
+      "alt": "5XL",
+      "chest": 116,
+      "hips": 124
+     }
+    ]
+   },
+   "male": {
+    "kind": "body",
+    "spread": 2,
+    "sizes": [
+     {
+      "label": "44",
+      "alt": "XS",
+      "chest": 88,
+      "hips": 92
+     },
+     {
+      "label": "46",
+      "alt": "S",
+      "chest": 92,
+      "hips": 96
+     },
+     {
+      "label": "48",
+      "alt": "M",
+      "chest": 96,
+      "hips": 100
+     },
+     {
+      "label": "50",
+      "alt": "L",
+      "chest": 100,
+      "hips": 104
+     },
+     {
+      "label": "52",
+      "alt": "XL",
+      "chest": 104,
+      "hips": 108
+     },
+     {
+      "label": "54",
+      "alt": "XXL",
+      "chest": 108,
+      "hips": 112
+     },
+     {
+      "label": "56",
+      "alt": "3XL",
+      "chest": 112,
+      "hips": 116
+     },
+     {
+      "label": "58",
+      "alt": "4XL",
+      "chest": 116,
+      "hips": 120
+     },
+     {
+      "label": "60",
+      "alt": "5XL",
+      "chest": 120,
+      "hips": 124
+     }
+    ]
+   }
+  }
+ }
+]

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Мой манекен</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+<header>
+  <h1>Мой манекен</h1>
+  <span class="note">Введите свои обхваты и выберите вещь: манекен покажет, где она сядет, а где будет тесно.</span>
+</header>
+<main>
+  <section class="card stage" id="stage" aria-label="Манекен">
+    <p class="loading" id="loading">Загружаю манекен…</p>
+    <div class="stage-bar stage-poses" role="group" aria-label="Поза">
+      <button class="chip" data-pose="stand" aria-pressed="true">Стоит</button>
+      <button class="chip" data-pose="walk" aria-pressed="false">Идёт</button>
+      <button class="chip" data-pose="sit" aria-pressed="false">Сидит</button>
+      <button class="chip" data-pose="lie" aria-pressed="false">Лежит</button>
+      <button class="chip show" data-pose="show" aria-pressed="false">▶ Показ</button>
+    </div>
+    <div class="stage-bar stage-actions" role="group" aria-label="Ракурс">
+      <button class="chip" data-view="front" aria-pressed="true">Спереди</button>
+      <button class="chip" data-view="back" aria-pressed="false">Сзади</button>
+      <button class="chip" data-view="left" aria-pressed="false">Слева</button>
+      <button class="chip" data-view="right" aria-pressed="false">Справа</button>
+    </div>
+  </section>
+
+  <div class="stack">
+    <section class="card">
+      <h2>Моя фигура</h2>
+      <div class="seg" role="group" aria-label="Пол">
+        <button data-gender="female" aria-pressed="true">Женская</button>
+        <button data-gender="male" aria-pressed="false">Мужская</button>
+      </div>
+      <div id="sliders"></div>
+      <p class="fact" id="fact" aria-live="polite"></p>
+      <p class="priv">Данные остаются на вашем устройстве и никуда не отправляются.</p>
+    </section>
+
+    <section class="card">
+      <h2>Вещь</h2>
+      <div class="items" id="items"></div>
+      <div id="item-extras"></div>
+    </section>
+
+    <section class="card">
+      <h2>Подойдёт ли размер</h2>
+      <div id="verdict"></div>
+    </section>
+  </div>
+</main>
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>
