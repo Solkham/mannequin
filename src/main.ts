@@ -1,5 +1,9 @@
-import { BodyModel, ZERO_SHAPE, type Figure, type Fit, type Gender, type Shape } from './body.ts';
-import { Stage, loadBody, type LoadedBody, type View } from './stage.ts';
+import { BodyModel, ZERO_SHAPE, zoneWeights, type Figure, type Fit, type Gender, type Ring, type Shape } from './body.ts';
+import { Stage, loadBody, type LoadedBody, type Tone, type View, type Zones } from './stage.ts';
+import { ZONE_NAME, chipLabel, evaluate, sizeName, zoneLabel, type Item, type Status } from './sizing.ts';
+import itemsJson from './data/items.json';
+
+const ITEMS = itemsJson as Item[];
 
 const MODELS = `${import.meta.env.BASE_URL}models/`;
 const STORAGE_KEY = 'mannequin:figure:v1';
@@ -20,10 +24,11 @@ const DEFAULTS: Record<Gender, Figure> = {
 interface Saved {
   gender: Gender;
   figures: Record<Gender, Figure>;
+  item: string;
 }
 
 function loadSaved(): Saved {
-  const fallback: Saved = { gender: 'female', figures: structuredClone(DEFAULTS) };
+  const fallback: Saved = { gender: 'female', figures: structuredClone(DEFAULTS), item: ITEMS[0].id };
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return fallback;
@@ -35,6 +40,7 @@ function loadSaved(): Saved {
         female: ok(s.figures?.female) ? s.figures.female : DEFAULTS.female,
         male: ok(s.figures?.male) ? s.figures.male : DEFAULTS.male,
       },
+      item: ITEMS.some((i) => i.id === s.item) ? s.item : ITEMS[0].id,
     };
   } catch {
     return fallback;
@@ -87,6 +93,7 @@ function syncInputs(): void {
 interface Body extends LoadedBody {
   model: BodyModel;
   shape: Shape;
+  weights: Record<Ring, Float32Array>;
 }
 let meta: { density: number; genders: Record<Gender, { file: string; rings: BodyModel['data']['rings'] }> } | null = null;
 const bodies = new Map<Gender, Promise<Body>>();
@@ -99,7 +106,7 @@ function getBody(gender: Gender): Promise<Body> {
       const g = meta!.genders[gender];
       const loaded = await loadBody(`${MODELS}${g.file}`);
       const model = new BodyModel({ ...loaded.data, rings: g.rings, density: meta!.density });
-      return { ...loaded, model, shape: { ...ZERO_SHAPE } };
+      return { ...loaded, model, shape: { ...ZERO_SHAPE }, weights: zoneWeights({ base: loaded.data.base, rings: g.rings }) };
     })();
     bodies.set(gender, p);
   }
@@ -111,6 +118,7 @@ let pending = false;
 
 function schedule(): void {
   save(state);
+  renderVerdict();
   if (pending) return;
   pending = true;
   requestAnimationFrame(() => {
@@ -149,6 +157,87 @@ function showFact(target: Figure, fit: Fit): void {
     (warn ? `<span class="warn">${warn}</span>` : '');
 }
 
+// Вещь и вердикт по размеру
+const itemsBox = document.getElementById('items')!;
+const verdictBox = document.getElementById('verdict')!;
+/** Размер, который человек выбрал сам; null — показываем лучший. */
+let pickedSize: string | null = null;
+
+const ZONE_TONE: Record<Status, Tone> = { ok: 'ok', snug: 'warn', loose: 'warn', big: 'warn', tight: 'bad' };
+
+function renderItems(): void {
+  itemsBox.replaceChildren(
+    ...ITEMS.map((item) => {
+      const b = document.createElement('button');
+      b.className = 'item';
+      const has = !!item.charts[state.gender];
+      b.disabled = !has;
+      b.setAttribute('aria-pressed', String(item.id === state.item && has));
+      const note = has ? `${item.shop} · ${item.material}` : `${item.shop} · нет ${state.gender === 'male' ? 'мужской' : 'женской'} сетки`;
+      b.innerHTML = `<b></b><span></span>`;
+      b.querySelector('b')!.textContent = item.title;
+      b.querySelector('span')!.textContent = note;
+      b.addEventListener('click', () => {
+        state.item = item.id;
+        pickedSize = null;
+        save(state);
+        renderItems();
+        renderVerdict();
+      });
+      return b;
+    }),
+  );
+}
+
+function renderVerdict(): void {
+  const item = ITEMS.find((i) => i.id === state.item)!;
+  const v = evaluate(item, state.gender, state.figures[state.gender]);
+  if (!v) {
+    verdictBox.innerHTML = `<div class="verdict none"><h3>Нет сетки</h3><p></p></div>`;
+    verdictBox.querySelector('p')!.textContent = `У вещи «${item.title}» нет ${state.gender === 'male' ? 'мужской' : 'женской'} размерной сетки. Выберите другую вещь.`;
+    stage.setZones({});
+    return;
+  }
+
+  let shown = v.sizes.findIndex((s) => s.size.label === pickedSize);
+  if (shown < 0) shown = v.best;
+  const sel = v.sizes[shown];
+
+  const wrap = document.createElement('div');
+  wrap.className = `verdict ${v.tone}`;
+  wrap.innerHTML = `<h3></h3><p></p><div class="sizes" role="group" aria-label="Размеры"></div>`;
+  wrap.querySelector('h3')!.textContent = v.title;
+  wrap.querySelector('p')!.textContent = v.text;
+  const row = wrap.querySelector('.sizes')!;
+  v.sizes.forEach((s, i) => {
+    const chip = chipLabel(s, i === v.best);
+    const b = document.createElement('button');
+    b.className = `size ${chip.tone}${i === v.best ? ' best' : ''}`;
+    b.setAttribute('aria-pressed', String(i === shown));
+    b.title = `${sizeName(s.size)}: ${s.zones.map((z) => `${ZONE_NAME[z.zone].toLowerCase()} ${zoneLabel(z)}`).join(', ')}`;
+    b.innerHTML = `<span></span><small></small>`;
+    b.querySelector('span')!.textContent = s.size.label;
+    b.querySelector('small')!.textContent = chip.text;
+    b.addEventListener('click', () => {
+      pickedSize = s.size.label;
+      renderVerdict();
+    });
+    row.append(b);
+  });
+
+  const hint = document.createElement('p');
+  hint.className = 'hint';
+  hint.textContent = `На манекене: ${sizeName(sel.size)}${shown === v.best ? ', лучший' : ''}. Нажмите на другой размер, чтобы примерить его.`;
+  const src = document.createElement('p');
+  src.className = 'src';
+  src.textContent = `${item.source} Это подсказка по обхватам, а не гарантия.`;
+  verdictBox.replaceChildren(wrap, hint, src);
+
+  const zones: Zones = {};
+  for (const z of sel.zones) zones[z.zone] = { tone: ZONE_TONE[z.status], text: `${ZONE_NAME[z.zone]}: ${zoneLabel(z)}` };
+  stage.setZones(zones);
+}
+
 async function showGender(gender: Gender): Promise<void> {
   state.gender = gender;
   save(state);
@@ -156,12 +245,15 @@ async function showGender(gender: Gender): Promise<void> {
     b.setAttribute('aria-pressed', String(b.dataset.gender === gender));
   });
   syncInputs();
+  renderItems();
+  pickedSize = null;
+  renderVerdict();
   loading.hidden = false;
   try {
     const body = await getBody(gender);
     if (state.gender !== gender) return;
     current = body;
-    stage.setBody(body.mesh);
+    stage.setBody(body.mesh, body.weights);
     refit();
     loading.hidden = true;
   } catch (e) {

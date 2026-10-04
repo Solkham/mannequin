@@ -1,4 +1,5 @@
-// Сцена Three.js: манекен, свет, тень на полу, кольца замеров, вид спереди и сбоку.
+// Сцена Three.js: манекен, свет, тень на полу, кольца замеров, подсветка зон
+// посадки с бирками, вид спереди и сбоку.
 
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -9,6 +10,13 @@ export type View = 'front' | 'side';
 
 const SKIN = 0xe4dbcd;
 const RING_COLOR = 0x2f4a3a;
+// Цвета зон те же, что в интерфейсе (--ok, --warn, --bad).
+const TONE_COLOR = { ok: 0x2e7d4f, warn: 0xc98a1b, bad: 0xb3372c } as const;
+// Насколько сильно зона перекрашивает кожу в центре пояса.
+const TINT = 0.7;
+
+export type Tone = keyof typeof TONE_COLOR;
+export type Zones = Partial<Record<Ring, { tone: Tone; text: string }>>;
 
 export interface LoadedBody {
   mesh: THREE.Mesh;
@@ -25,7 +33,12 @@ export async function loadBody(url: string): Promise<LoadedBody> {
   const geo = mesh.geometry;
   const dict = mesh.morphTargetDictionary ?? {};
   const names = Object.keys(dict).sort((a, b) => dict[a] - dict[b]);
-  mesh.material = new THREE.MeshStandardMaterial({ color: SKIN, roughness: 0.72, metalness: 0 });
+  // Цвет кожи и подсветка зон живут в цвете вершин, материал белый.
+  mesh.material = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.72, metalness: 0 });
+  const skin = new THREE.Color(SKIN);
+  const colors = new Float32Array(geo.attributes.position.count * 3);
+  for (let i = 0; i < colors.length; i += 3) colors.set([skin.r, skin.g, skin.b], i);
+  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   mesh.castShadow = true;
   mesh.removeFromParent();
   return {
@@ -46,6 +59,10 @@ export class Stage {
   private readonly controls: OrbitControls;
   private readonly key: THREE.DirectionalLight;
   private readonly rings = new Map<Ring, THREE.LineLoop>();
+  private readonly tags = new Map<Ring, HTMLSpanElement>();
+  private hulls: Fit['measures']['hulls'] | null = null;
+  private weights: Record<Ring, Float32Array> | null = null;
+  private zones: Zones = {};
   private mesh: THREE.Mesh | null = null;
   private heightM = 1.7;
   private azimuthGoal: number | null = null;
@@ -83,6 +100,12 @@ export class Stage {
       line.renderOrder = 1;
       this.rings.set(r, line);
       this.scene.add(line);
+
+      const tag = document.createElement('span');
+      tag.className = 'tag';
+      tag.hidden = true;
+      host.append(tag);
+      this.tags.set(r, tag);
     }
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
@@ -97,10 +120,54 @@ export class Stage {
     this.renderer.setAnimationLoop(() => this.frame());
   }
 
-  setBody(mesh: THREE.Mesh): void {
+  /** weights — пояса зон для этой сетки (zoneWeights из body.ts). */
+  setBody(mesh: THREE.Mesh, weights: Record<Ring, Float32Array>): void {
     if (this.mesh) this.scene.remove(this.mesh);
     this.mesh = mesh;
+    this.weights = weights;
     this.scene.add(mesh);
+    this.paint();
+  }
+
+  /** Подсветка зон и бирки: зона без записи не подсвечивается и показывает линию замера. */
+  setZones(zones: Zones): void {
+    this.zones = zones;
+    for (const r of RINGS) {
+      const z = zones[r];
+      const tag = this.tags.get(r)!;
+      tag.hidden = !z;
+      if (z) {
+        tag.className = `tag ${z.tone}`;
+        tag.textContent = z.text;
+      }
+      this.rings.get(r)!.visible = !z;
+    }
+    this.paint();
+  }
+
+  private paint(): void {
+    if (!this.mesh || !this.weights) return;
+    const attr = this.mesh.geometry.getAttribute('color') as THREE.BufferAttribute;
+    const c = attr.array as Float32Array;
+    const skin = new THREE.Color(SKIN);
+    const tones = RINGS.map((r) => {
+      const z = this.zones[r];
+      return z ? { w: this.weights![r], color: new THREE.Color(TONE_COLOR[z.tone]) } : null;
+    });
+    for (let v = 0; v < attr.count; v++) {
+      let r = skin.r, g = skin.g, b = skin.b;
+      for (const t of tones) {
+        const k = t ? t.w[v] * TINT : 0;
+        if (k <= 0) continue;
+        r += (t!.color.r - r) * k;
+        g += (t!.color.g - g) * k;
+        b += (t!.color.b - b) * k;
+      }
+      c[v * 3] = r;
+      c[v * 3 + 1] = g;
+      c[v * 3 + 2] = b;
+    }
+    attr.needsUpdate = true;
   }
 
   update(fit: Fit): void {
@@ -109,6 +176,7 @@ export class Stage {
     for (let i = 0; i < inf.length; i++) inf[i] = fit.influences[i];
     this.mesh.scale.setScalar(fit.scale);
     this.mesh.position.y = -fit.measures.minY;
+    this.hulls = fit.measures.hulls;
 
     for (const r of RINGS) {
       const { y, points } = fit.measures.hulls[r];
@@ -175,5 +243,30 @@ export class Stage {
     }
     this.controls.update();
     this.renderer.render(this.scene, this.camera);
+    this.placeTags();
+  }
+
+  /** Бирка встаёт справа от самой правой на экране точки пояса. */
+  private placeTags(): void {
+    if (!this.hulls) return;
+    const { clientWidth: W, clientHeight: H } = this.host;
+    const v = new THREE.Vector3();
+    for (const r of RINGS) {
+      const tag = this.tags.get(r)!;
+      if (tag.hidden) continue;
+      const { y, points } = this.hulls[r];
+      let sx = -Infinity;
+      let sy = 0;
+      for (const [x, z] of points) {
+        v.set(x, y, z).project(this.camera);
+        const px = (v.x * 0.5 + 0.5) * W;
+        if (px > sx) {
+          sx = px;
+          sy = (-v.y * 0.5 + 0.5) * H;
+        }
+      }
+      const left = Math.min(sx + 10, W - tag.offsetWidth - 8);
+      tag.style.transform = `translate(${Math.round(left)}px, ${Math.round(sy - tag.offsetHeight / 2)}px)`;
+    }
   }
 }

@@ -1,0 +1,404 @@
+[
+ {
+  "id": "hoodie",
+  "title": "Худи оверсайз",
+  "shop": "Wildberries",
+  "material": "хлопок, футер",
+  "stretch": 2,
+  "source": "Типовая сетка оверсайз-худи по замерам изделия, не с карточки продавца. Сетку с карточки перепишем на шаге 5.",
+  "charts": {
+   "female": {
+    "kind": "garment",
+    "ease": {
+     "chest": [
+      8,
+      30
+     ]
+    },
+    "sizes": [
+     {
+      "label": "S",
+      "alt": "42–44",
+      "chest": 112
+     },
+     {
+      "label": "M",
+      "alt": "46–48",
+      "chest": 120
+     },
+     {
+      "label": "L",
+      "alt": "50–52",
+      "chest": 128
+     },
+     {
+      "label": "XL",
+      "alt": "54–56",
+      "chest": 136
+     },
+     {
+      "label": "2XL",
+      "alt": "58–60",
+      "chest": 144
+     }
+    ]
+   },
+   "male": {
+    "kind": "garment",
+    "ease": {
+     "chest": [
+      8,
+      30
+     ]
+    },
+    "sizes": [
+     {
+      "label": "S",
+      "alt": "42–44",
+      "chest": 112
+     },
+     {
+      "label": "M",
+      "alt": "46–48",
+      "chest": 120
+     },
+     {
+      "label": "L",
+      "alt": "50–52",
+      "chest": 128
+     },
+     {
+      "label": "XL",
+      "alt": "54–56",
+      "chest": 136
+     },
+     {
+      "label": "2XL",
+      "alt": "58–60",
+      "chest": 144
+     }
+    ]
+   }
+  }
+ },
+ {
+  "id": "jeans",
+  "title": "Джинсы прямые",
+  "shop": "Ozon",
+  "material": "деним с эластаном",
+  "stretch": 2,
+  "source": "Типовая российская сетка по обхватам тела, не с карточки продавца. Сетку с карточки перепишем на шаге 5.",
+  "charts": {
+   "female": {
+    "kind": "body",
+    "spread": 2,
+    "sizes": [
+     {
+      "label": "42",
+      "alt": "XS",
+      "waist": 66,
+      "hips": 92
+     },
+     {
+      "label": "44",
+      "alt": "S",
+      "waist": 70,
+      "hips": 96
+     },
+     {
+      "label": "46",
+      "alt": "M",
+      "waist": 74,
+      "hips": 100
+     },
+     {
+      "label": "48",
+      "alt": "L",
+      "waist": 78,
+      "hips": 104
+     },
+     {
+      "label": "50",
+      "alt": "XL",
+      "waist": 82,
+      "hips": 108
+     },
+     {
+      "label": "52",
+      "alt": "XXL",
+      "waist": 86,
+      "hips": 112
+     },
+     {
+      "label": "54",
+      "alt": "3XL",
+      "waist": 90,
+      "hips": 116
+     },
+     {
+      "label": "56",
+      "alt": "4XL",
+      "waist": 94,
+      "hips": 120
+     }
+    ]
+   },
+   "male": {
+    "kind": "body",
+    "spread": 2,
+    "sizes": [
+     {
+      "label": "44",
+      "alt": "XS",
+      "waist": 76,
+      "hips": 92
+     },
+     {
+      "label": "46",
+      "alt": "S",
+      "waist": 80,
+      "hips": 96
+     },
+     {
+      "label": "48",
+      "alt": "M",
+      "waist": 84,
+      "hips": 100
+     },
+     {
+      "label": "50",
+      "alt": "L",
+      "waist": 88,
+      "hips": 104
+     },
+     {
+      "label": "52",
+      "alt": "XL",
+      "waist": 92,
+      "hips": 108
+     },
+     {
+      "label": "54",
+      "alt": "XXL",
+      "waist": 96,
+      "hips": 112
+     },
+     {
+      "label": "56",
+      "alt": "3XL",
+      "waist": 100,
+      "hips": 116
+     },
+     {
+      "label": "58",
+      "alt": "4XL",
+      "waist": 104,
+      "hips": 120
+     }
+    ]
+   }
+  }
+ },
+ {
+  "id": "dress",
+  "title": "Платье миди",
+  "shop": "Lamoda",
+  "material": "вискоза",
+  "stretch": 0,
+  "source": "Типовая российская сетка по обхватам тела, не с карточки продавца. Сетку с карточки перепишем на шаге 5.",
+  "charts": {
+   "female": {
+    "kind": "body",
+    "spread": 2,
+    "sizes": [
+     {
+      "label": "42",
+      "alt": "XS",
+      "chest": 84,
+      "waist": 66,
+      "hips": 92
+     },
+     {
+      "label": "44",
+      "alt": "S",
+      "chest": 88,
+      "waist": 70,
+      "hips": 96
+     },
+     {
+      "label": "46",
+      "alt": "M",
+      "chest": 92,
+      "waist": 74,
+      "hips": 100
+     },
+     {
+      "label": "48",
+      "alt": "L",
+      "chest": 96,
+      "waist": 78,
+      "hips": 104
+     },
+     {
+      "label": "50",
+      "alt": "XL",
+      "chest": 100,
+      "waist": 82,
+      "hips": 108
+     },
+     {
+      "label": "52",
+      "alt": "XXL",
+      "chest": 104,
+      "waist": 86,
+      "hips": 112
+     },
+     {
+      "label": "54",
+      "alt": "3XL",
+      "chest": 108,
+      "waist": 90,
+      "hips": 116
+     },
+     {
+      "label": "56",
+      "alt": "4XL",
+      "chest": 112,
+      "waist": 94,
+      "hips": 120
+     }
+    ]
+   }
+  }
+ },
+ {
+  "id": "puffer",
+  "title": "Пуховик",
+  "shop": "Wildberries",
+  "material": "пух",
+  "stretch": 0,
+  "source": "Типовая российская сетка по обхватам тела, не с карточки продавца. Сетку с карточки перепишем на шаге 5.",
+  "charts": {
+   "female": {
+    "kind": "body",
+    "spread": 2,
+    "sizes": [
+     {
+      "label": "42",
+      "alt": "XS",
+      "chest": 84,
+      "hips": 92
+     },
+     {
+      "label": "44",
+      "alt": "S",
+      "chest": 88,
+      "hips": 96
+     },
+     {
+      "label": "46",
+      "alt": "M",
+      "chest": 92,
+      "hips": 100
+     },
+     {
+      "label": "48",
+      "alt": "L",
+      "chest": 96,
+      "hips": 104
+     },
+     {
+      "label": "50",
+      "alt": "XL",
+      "chest": 100,
+      "hips": 108
+     },
+     {
+      "label": "52",
+      "alt": "XXL",
+      "chest": 104,
+      "hips": 112
+     },
+     {
+      "label": "54",
+      "alt": "3XL",
+      "chest": 108,
+      "hips": 116
+     },
+     {
+      "label": "56",
+      "alt": "4XL",
+      "chest": 112,
+      "hips": 120
+     },
+     {
+      "label": "58",
+      "alt": "5XL",
+      "chest": 116,
+      "hips": 124
+     }
+    ]
+   },
+   "male": {
+    "kind": "body",
+    "spread": 2,
+    "sizes": [
+     {
+      "label": "44",
+      "alt": "XS",
+      "chest": 88,
+      "hips": 92
+     },
+     {
+      "label": "46",
+      "alt": "S",
+      "chest": 92,
+      "hips": 96
+     },
+     {
+      "label": "48",
+      "alt": "M",
+      "chest": 96,
+      "hips": 100
+     },
+     {
+      "label": "50",
+      "alt": "L",
+      "chest": 100,
+      "hips": 104
+     },
+     {
+      "label": "52",
+      "alt": "XL",
+      "chest": 104,
+      "hips": 108
+     },
+     {
+      "label": "54",
+      "alt": "XXL",
+      "chest": 108,
+      "hips": 112
+     },
+     {
+      "label": "56",
+      "alt": "3XL",
+      "chest": 112,
+      "hips": 116
+     },
+     {
+      "label": "58",
+      "alt": "4XL",
+      "chest": 116,
+      "hips": 120
+     },
+     {
+      "label": "60",
+      "alt": "5XL",
+      "chest": 120,
+      "hips": 124
+     }
+    ]
+   }
+  }
+ }
+]

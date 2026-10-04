@@ -231,6 +231,59 @@ function clamp(v: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, v));
 }
 
+/**
+ * Пояса для подсветки зон: для каждой вершины вес 0..1, насколько она в поясе груди,
+ * талии или бёдер. Считается один раз по базовой сетке: морфы двигают вершины,
+ * но принадлежность к поясу не меняют. Руки отсекаются: в пояс попадает только то,
+ * что внутри обхвата торса (выпуклой оболочки кольца) плюс запас.
+ */
+export function zoneWeights(data: Pick<BodyData, 'base' | 'rings'>): Record<Ring, Float32Array> {
+  const p = data.base;
+  const n = p.length / 3;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (let i = 1; i < p.length; i += 3) {
+    minY = Math.min(minY, p[i]);
+    maxY = Math.max(maxY, p[i]);
+  }
+  const half = (maxY - minY) * 0.03; // полуширина пояса: ~5 см у человека 170 см
+  const margin = 0.012;
+
+  const out = {} as Record<Ring, Float32Array>;
+  for (const r of RINGS) {
+    const ids = data.rings[r];
+    let level = 0;
+    for (const i of ids) level += p[i * 3 + 1];
+    level /= ids.length;
+    const hull = convexHull(ids.map((i) => [p[i * 3], p[i * 3 + 2]] as [number, number]));
+    const edges = hull.map(([ax, az], k) => {
+      const [bx, bz] = hull[(k + 1) % hull.length];
+      const len = Math.hypot(bx - ax, bz - az) || 1;
+      return [ax, az, (bx - ax) / len, (bz - az) / len];
+    });
+
+    const w = new Float32Array(n);
+    for (let v = 0; v < n; v++) {
+      const dy = Math.abs(p[v * 3 + 1] - level);
+      if (dy >= half) continue;
+      const x = p[v * 3], z = p[v * 3 + 2];
+      let inside = true;
+      for (const [ax, az, ex, ez] of edges) {
+        // Оболочка обходится против часовой: внутри cross >= 0.
+        if (ex * (z - az) - ez * (x - ax) < -margin) {
+          inside = false;
+          break;
+        }
+      }
+      if (!inside) continue;
+      const t = dy / half;
+      w[v] = 1 - t * t * (3 - 2 * t); // мягкий край пояса
+    }
+    out[r] = w;
+  }
+  return out;
+}
+
 /** Выпуклая оболочка (монотонная цепь Эндрю): так ложится сантиметровая лента. */
 export function convexHull(points: [number, number][]): [number, number][] {
   const pts = [...points].sort((a, b) => a[0] - b[0] || a[1] - b[1]);

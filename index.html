@@ -4,17 +4,18 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Мой манекен</title>
+<link rel="icon" href="data:,">
 <link rel="stylesheet" href="/src/style.css">
 </head>
 <body>
 <header>
   <h1>Мой манекен</h1>
-  <span class="note">Двигайте ползунки, манекен подстраивается сразу. Вещи и подсказка размера появятся на следующих шагах.</span>
+  <span class="note">Введите свои обхваты и выберите вещь: манекен покажет, где она сядет, а где будет тесно.</span>
 </header>
 <main>
   <section class="card stage" id="stage" aria-label="Манекен">
     <p class="loading" id="loading">Загружаю манекен…</p>
-    <p class="stage-label">Линии на манекене: где измерены грудь, талия и бёдра. Крутите мышью или пальцем.</p>
+    <p class="stage-label">Подсветка показывает, где вещь будет тесной или свободной. Цвет всегда дублируется словом.</p>
     <div class="stage-actions" role="group" aria-label="Ракурс">
       <button class="chip" data-view="front" aria-pressed="true">Спереди</button>
       <button class="chip" data-view="side" aria-pressed="false">Сбоку</button>
@@ -31,6 +32,16 @@
       <div id="sliders"></div>
       <p class="fact" id="fact" aria-live="polite"></p>
       <p class="priv">Данные остаются на вашем устройстве и никуда не отправляются.</p>
+    </section>
+
+    <section class="card">
+      <h2>Вещь</h2>
+      <div class="items" id="items"></div>
+    </section>
+
+    <section class="card">
+      <h2>Подойдёт ли размер</h2>
+      <div id="verdict"></div>
     </section>
   </div>
 </main>
