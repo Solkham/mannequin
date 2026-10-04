@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Мой манекен</title>
+<link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+<header>
+  <h1>Мой манекен</h1>
+  <span class="note">Двигайте ползунки, манекен подстраивается сразу. Вещи и подсказка размера появятся на следующих шагах.</span>
+</header>
+<main>
+  <section class="card stage" id="stage" aria-label="Манекен">
+    <p class="loading" id="loading">Загружаю манекен…</p>
+    <p class="stage-label">Линии на манекене: где измерены грудь, талия и бёдра. Крутите мышью или пальцем.</p>
+    <div class="stage-actions" role="group" aria-label="Ракурс">
+      <button class="chip" data-view="front" aria-pressed="true">Спереди</button>
+      <button class="chip" data-view="side" aria-pressed="false">Сбоку</button>
+    </div>
+  </section>
+
+  <div class="stack">
+    <section class="card">
+      <h2>Моя фигура</h2>
+      <div class="seg" role="group" aria-label="Пол">
+        <button data-gender="female" aria-pressed="true">Женская</button>
+        <button data-gender="male" aria-pressed="false">Мужская</button>
+      </div>
+      <div id="sliders"></div>
+      <p class="fact" id="fact" aria-live="polite"></p>
+      <p class="priv">Данные остаются на вашем устройстве и никуда не отправляются.</p>
+    </section>
+  </div>
+</main>
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>
