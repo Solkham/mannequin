@@ -32,11 +32,27 @@ export interface Chart {
   sizes: ChartSize[];
 }
 
+/** Тип вещи: от него зависят форма оболочки на манекене и свобода облегания. */
+export type Category = 'top' | 'bottom' | 'dress' | 'outer';
+/** Фактура ткани на манекене (src/fabrics.ts). */
+export type Fabric = 'plain' | 'knit' | 'denim' | 'quilt' | 'floral';
+
+export interface ItemColor {
+  name: string;
+  hex: string;
+}
+
 export interface Item {
   id: string;
   title: string;
   shop: string;
   material: string;
+  category: Category;
+  fabric: Fabric;
+  /** Цвета на выбор; первый — по умолчанию. */
+  colors: ItemColor[];
+  /** Нашивка-принт на груди. */
+  print?: 'badge';
   /** На сколько см ткань без вреда тянется сверх сетки: деним с эластаном 2, трикотаж 3–4. */
   stretch: number;
   url?: string;

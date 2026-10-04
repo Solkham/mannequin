@@ -1,13 +1,25 @@
 import { BodyModel, ZERO_SHAPE, zoneWeights, type Figure, type Fit, type Gender, type Ring, type Shape } from './body.ts';
 import { Stage, loadBody, type LoadedBody, type Pose, type Tone, type View, type Zones } from './stage.ts';
 import { Rig, type BonesMeta } from './rig.ts';
-import { ZONE_NAME, chipLabel, evaluate, sizeName, zoneLabel, type Item, type Status } from './sizing.ts';
+import { ZONE_NAME, chipLabel, evaluate, sizeName, zoneLabel, type Category, type Item, type SizeFit, type Status } from './sizing.ts';
+import { Garment, type Look } from './garment.ts';
+import { badgePrint } from './fabrics.ts';
+import { loadPhoto, type PhotoPrint } from './photo.ts';
+import { TONE_COLOR } from './stage.ts';
 import itemsJson from './data/items.json';
 
 const ITEMS = itemsJson as Item[];
 
 const MODELS = `${import.meta.env.BASE_URL}models/`;
 const STORAGE_KEY = 'mannequin:figure:v1';
+const PHOTO_KEY = 'mannequin:photo:v1';
+
+const CATEGORY_NAME: Record<Category, string> = {
+  top: 'Футболка, худи, свитер',
+  bottom: 'Брюки, джинсы',
+  dress: 'Платье',
+  outer: 'Куртка, пуховик',
+};
 
 const SLIDERS: { key: keyof Figure; label: string; min: number; max: number; unit: string }[] = [
   { key: 'height', label: 'Рост', min: 140, max: 210, unit: 'см' },
@@ -26,10 +38,18 @@ interface Saved {
   gender: Gender;
   figures: Record<Gender, Figure>;
   item: string;
+  /** Выбранный цвет каждой вещи: индекс в item.colors. */
+  colors: Record<string, number>;
+  /** Тип своей вещи (по фото). */
+  custom: Category;
+  /** Красить посадку цветом поверх ткани. */
+  tint: boolean;
 }
 
 function loadSaved(): Saved {
-  const fallback: Saved = { gender: 'female', figures: structuredClone(DEFAULTS), item: ITEMS[0].id };
+  const fallback: Saved = {
+    gender: 'female', figures: structuredClone(DEFAULTS), item: ITEMS[0].id, colors: {}, custom: 'top', tint: false,
+  };
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return fallback;
@@ -41,7 +61,10 @@ function loadSaved(): Saved {
         female: ok(s.figures?.female) ? s.figures.female : DEFAULTS.female,
         male: ok(s.figures?.male) ? s.figures.male : DEFAULTS.male,
       },
-      item: ITEMS.some((i) => i.id === s.item) ? s.item : ITEMS[0].id,
+      item: s.item === 'custom' || ITEMS.some((i) => i.id === s.item) ? s.item : ITEMS[0].id,
+      colors: typeof s.colors === 'object' && s.colors ? s.colors : {},
+      custom: s.custom && s.custom in CATEGORY_NAME ? s.custom : 'top',
+      tint: s.tint === true,
     };
   } catch {
     return fallback;
@@ -176,15 +199,42 @@ let pickedSize: string | null = null;
 
 const ZONE_TONE: Record<Status, Tone> = { ok: 'ok', snug: 'warn', loose: 'warn', big: 'warn', tight: 'bad' };
 
+let photo: PhotoPrint | null = null;
+let photoVersion = 0;
+
+/** Своя вещь: стандартная сетка выбранного типа, цвет и рисунок — с фото человека. */
+function customItem(): Item {
+  const base = ITEMS.find((i) => i.category === state.custom)!;
+  return {
+    ...base,
+    id: 'custom',
+    title: 'Своя вещь',
+    shop: photo ? 'по вашему фото' : 'загрузите фото',
+    material: CATEGORY_NAME[state.custom].toLowerCase(),
+    fabric: 'plain',
+    print: undefined,
+    colors: [{ name: 'с фото', hex: photo?.color ?? '#8a8f99' }],
+    source: `Стандартная российская сетка для типа «${CATEGORY_NAME[state.custom]}».`,
+  };
+}
+
+function currentItem(): Item {
+  return state.item === 'custom' ? customItem() : ITEMS.find((i) => i.id === state.item)!;
+}
+
+const extrasBox = document.getElementById('item-extras')!;
+
 function renderItems(): void {
   itemsBox.replaceChildren(
-    ...ITEMS.map((item) => {
+    ...[...ITEMS, customItem()].map((item) => {
       const b = document.createElement('button');
       b.className = 'item';
       const has = !!item.charts[state.gender];
-      b.disabled = !has;
-      b.setAttribute('aria-pressed', String(item.id === state.item && has));
-      const note = has ? `${item.shop} · ${item.material}` : `${item.shop} · нет ${state.gender === 'male' ? 'мужской' : 'женской'} сетки`;
+      b.disabled = !has && item.id !== 'custom';
+      b.setAttribute('aria-pressed', String(item.id === state.item));
+      const note = has || item.id === 'custom'
+        ? `${item.shop} · ${item.material}`
+        : `${item.shop} · нет ${state.gender === 'male' ? 'мужской' : 'женской'} сетки`;
       b.innerHTML = `<b></b><span></span>`;
       b.querySelector('b')!.textContent = item.title;
       b.querySelector('span')!.textContent = note;
@@ -198,12 +248,140 @@ function renderItems(): void {
       return b;
     }),
   );
+  renderExtras();
 }
 
+/** Под вещами: цвета на выбор или загрузка своего фото. */
+function renderExtras(): void {
+  const item = currentItem();
+  extrasBox.replaceChildren();
+  if (item.id === 'custom') {
+    extrasBox.innerHTML = `
+      <div class="custom">
+        <label class="field">Тип вещи <select id="custom-type"></select></label>
+        <label class="upload chip">Загрузить фото вещи<input id="custom-photo" type="file" accept="image/*" hidden></label>
+        <p class="hint">Фото спереди на светлом однотонном фоне: вещь лежит или висит. Цвет и рисунок перейдут на манекен. Фото остаётся у вас на устройстве.</p>
+      </div>`;
+    const sel = extrasBox.querySelector<HTMLSelectElement>('#custom-type')!;
+    for (const [k, v] of Object.entries(CATEGORY_NAME)) sel.add(new Option(v, k, false, k === state.custom));
+    sel.addEventListener('change', () => {
+      state.custom = sel.value as Category;
+      pickedSize = null;
+      save(state);
+      renderItems();
+      renderVerdict();
+    });
+    extrasBox.querySelector<HTMLInputElement>('#custom-photo')!.addEventListener('change', async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      photo = await loadPhoto(file);
+      photoVersion++;
+      try {
+        localStorage.setItem(PHOTO_KEY, photo.canvas.toDataURL('image/png'));
+      } catch {
+        // Не влезло в хранилище: фото будет до перезагрузки.
+      }
+      renderItems();
+      renderVerdict();
+    });
+    return;
+  }
+  const row = document.createElement('div');
+  row.className = 'colors';
+  row.setAttribute('role', 'group');
+  row.setAttribute('aria-label', 'Цвет');
+  const chosen = state.colors[item.id] ?? 0;
+  const label = document.createElement('span');
+  label.className = 'colors-label';
+  label.textContent = `Цвет: ${item.colors[chosen]?.name ?? ''}`;
+  row.append(label);
+  item.colors.forEach((c, i) => {
+    const b = document.createElement('button');
+    b.className = 'swatch';
+    b.style.background = c.hex;
+    b.title = c.name;
+    b.setAttribute('aria-label', c.name);
+    b.setAttribute('aria-pressed', String(i === chosen));
+    b.addEventListener('click', () => {
+      state.colors[item.id] = i;
+      save(state);
+      renderExtras();
+      dressUp();
+    });
+    row.append(b);
+  });
+  extrasBox.append(row);
+}
+
+// ------------------------------------------------------------ вещь на манекене
+
+let garment: Garment | null = null;
+let garmentKey = '';
+let lookKey = '';
+let shownSize: SizeFit | null = null;
+let shownTints: Partial<Record<Ring, number>> = {};
+
+function lookFor(item: Item): Look {
+  if (item.id === 'custom') {
+    return { color: photo?.color ?? '#8a8f99', fabric: 'plain', print: photo ? { image: photo.canvas, rect: 'front' } : null };
+  }
+  const color = item.colors[state.colors[item.id] ?? 0]?.hex ?? item.colors[0].hex;
+  const light = parseInt(color.slice(1, 3), 16) + parseInt(color.slice(3, 5), 16) + parseInt(color.slice(5, 7), 16) > 420;
+  return {
+    color,
+    fabric: item.fabric,
+    print: item.print === 'badge' ? { image: badgePrint(light ? '#2b2b2d' : '#f4efe6'), rect: 'chest' } : null,
+  };
+}
+
+/** Надеть выбранную вещь в выбранном размере (или снять, если сетки нет). */
+function dressUp(): void {
+  if (!current) return;
+  const item = currentItem();
+  stage.setDressed(!!shownSize);
+  if (!shownSize) {
+    garment?.dispose();
+    garment = null;
+    garmentKey = '';
+    return;
+  }
+  const key = `${state.gender}:${item.category}`;
+  if (!garment || key !== garmentKey) {
+    garment?.dispose();
+    garment = new Garment(current.rig, current.meta.parts, item.category);
+    garmentKey = key;
+    lookKey = '';
+  }
+  const g = garment;
+  const lk = `${item.id}:${state.colors[item.id] ?? 0}:${photoVersion}:${item.category}`;
+  if (lk !== lookKey) {
+    g.setLook(lookFor(item));
+    lookKey = lk;
+  }
+  g.setTintVisible(state.tint);
+  rebuildGarment();
+}
+
+function rebuildGarment(): void {
+  const fit = stage.currentFit;
+  if (!garment || !current || !fit || !shownSize) return;
+  const h = fit.measures.hulls;
+  garment.rebuild(
+    current.model.blend(current.shape),
+    state.figures[state.gender],
+    shownSize,
+    { chest: h.chest.y, waist: h.waist.y, hips: h.hips.y },
+    shownTints,
+  );
+}
+stage.onRebuild = rebuildGarment;
+
 function renderVerdict(): void {
-  const item = ITEMS.find((i) => i.id === state.item)!;
+  const item = currentItem();
   const v = evaluate(item, state.gender, state.figures[state.gender]);
   if (!v) {
+    shownSize = null;
+    dressUp();
     verdictBox.innerHTML = `<div class="verdict none"><h3>Нет сетки</h3><p></p></div>`;
     verdictBox.querySelector('p')!.textContent = `У вещи «${item.title}» нет ${state.gender === 'male' ? 'мужской' : 'женской'} размерной сетки. Выберите другую вещь.`;
     stage.setZones({});
@@ -242,11 +420,28 @@ function renderVerdict(): void {
   const src = document.createElement('p');
   src.className = 'src';
   src.textContent = `${item.source} Это подсказка по обхватам, а не гарантия.`;
-  verdictBox.replaceChildren(wrap, hint, src);
+  const tint = document.createElement('label');
+  tint.className = 'toggle';
+  tint.innerHTML = `<input type="checkbox"> Показывать посадку цветом на вещи`;
+  const box = tint.querySelector('input')!;
+  box.checked = state.tint;
+  box.addEventListener('change', () => {
+    state.tint = box.checked;
+    save(state);
+    garment?.setTintVisible(state.tint);
+  });
+  verdictBox.replaceChildren(wrap, hint, tint, src);
 
   const zones: Zones = {};
-  for (const z of sel.zones) zones[z.zone] = { tone: ZONE_TONE[z.status], text: `${ZONE_NAME[z.zone]}: ${zoneLabel(z)}` };
+  shownTints = {};
+  for (const z of sel.zones) {
+    const tone = ZONE_TONE[z.status];
+    zones[z.zone] = { tone, text: `${ZONE_NAME[z.zone]}: ${zoneLabel(z)}` };
+    shownTints[z.zone] = TONE_COLOR[tone];
+  }
   stage.setZones(zones);
+  shownSize = sel;
+  dressUp();
 }
 
 async function showGender(gender: Gender): Promise<void> {
@@ -266,6 +461,7 @@ async function showGender(gender: Gender): Promise<void> {
     current = body;
     stage.setBody(body.rig, body.data.names, body.weights);
     refit();
+    dressUp();
     loading.hidden = true;
   } catch (e) {
     loading.textContent = 'Не удалось загрузить манекен. Обновите страницу.';
@@ -290,5 +486,20 @@ document.querySelectorAll<HTMLButtonElement>('[data-view]').forEach((b) => {
     document.querySelectorAll('[data-view]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
   });
 });
+
+// Сохранённое фото своей вещи: уже вырезано, только найти цвет.
+(async () => {
+  try {
+    const url = localStorage.getItem(PHOTO_KEY);
+    if (url) {
+      photo = await loadPhoto(url, false);
+      photoVersion++;
+      renderItems();
+      renderVerdict();
+    }
+  } catch {
+    // Нет хранилища или битая картинка: без фото.
+  }
+})();
 
 showGender(state.gender);

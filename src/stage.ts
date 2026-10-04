@@ -64,7 +64,7 @@ export class Stage {
   private readonly tags = new Map<Ring, HTMLSpanElement>();
   private readonly stool: THREE.Group;
   private readonly mat: THREE.Mesh;
-  private readonly clock = new THREE.Clock();
+  private readonly timer = new THREE.Timer();
 
   rig: Rig | null = null;
   private names: string[] = [];
@@ -73,6 +73,7 @@ export class Stage {
   private anchors: Record<Ring, string> | null = null;
   private zones: Zones = {};
   private pose: Pose = 'stand';
+  private dressed = false;
   private azimuthGoal: number | null = null;
   private framedFor = '';
   /** Вызывается после смены формы тела: одежде нужно перестроиться. */
@@ -183,9 +184,15 @@ export class Stage {
     this.paint();
   }
 
-  /** Линии замера видны там, где нет вердикта, и только когда манекен стоит. */
+  /** Одета ли вещь: тогда линии замера не рисуем поверх ткани. */
+  setDressed(on: boolean): void {
+    this.dressed = on;
+    this.syncRingVisibility();
+  }
+
+  /** Линии замера видны там, где нет вердикта, только раздетым и только когда манекен стоит. */
   private syncRingVisibility(): void {
-    for (const r of RINGS) this.rings.get(r)!.visible = !this.zones[r] && this.pose === 'stand';
+    for (const r of RINGS) this.rings.get(r)!.visible = !this.zones[r] && this.pose === 'stand' && !this.dressed;
   }
 
   private paint(): void {
@@ -241,7 +248,7 @@ export class Stage {
       line.geometry.computeBoundingSphere();
     }
     this.onRebuild?.();
-    this.place(this.clock.getElapsedTime());
+    this.place(this.elapsed());
   }
 
   get currentFit(): Fit | null {
@@ -250,7 +257,7 @@ export class Stage {
 
   setPose(pose: Pose): void {
     this.pose = pose;
-    this.clock.start();
+    this.timer.reset();
     this.syncRingVisibility();
     this.place(0);
   }
@@ -335,7 +342,7 @@ export class Stage {
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     this.framedFor = '';
-    if (this.fit) this.place(this.clock.getElapsedTime());
+    if (this.fit) this.place(this.elapsed());
     else this.frameBox(1.7, 0.85, 0.62);
   }
 
@@ -362,8 +369,13 @@ export class Stage {
     this.controls.update();
   }
 
+  private elapsed(): number {
+    return this.timer.getElapsed();
+  }
+
   private frame(): void {
-    if (this.pose === 'walk') this.place(this.clock.getElapsedTime());
+    this.timer.update();
+    if (this.pose === 'walk') this.place(this.elapsed());
     if (this.azimuthGoal !== null) {
       const cur = this.controls.getAzimuthalAngle();
       const diff = Math.atan2(Math.sin(this.azimuthGoal - cur), Math.cos(this.azimuthGoal - cur));

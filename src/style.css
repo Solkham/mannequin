@@ -73,3 +73,14 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
 .size[aria-pressed="true"] { outline: 2px solid var(--ink); outline-offset: 2px; }
 .hint { font-size: 12px; color: var(--mute); margin-top: 8px; }
 .src { font-size: 12px; color: var(--mute); margin-top: 10px; }
+
+.colors { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.colors-label { font-size: 13px; color: var(--mute); margin-right: 4px; }
+.swatch { width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--card); box-shadow: 0 0 0 1px var(--line); padding: 0; }
+.swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--accent); }
+.custom { display: grid; gap: 10px; margin-top: 12px; }
+.field { display: grid; gap: 4px; font-size: 13px; color: var(--mute); }
+.field select { font: inherit; font-size: 14px; color: var(--ink); padding: 7px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
+.upload { justify-self: start; cursor: pointer; background: var(--accent); color: #fff; border-color: var(--accent); }
+.toggle { display: flex; gap: 8px; align-items: center; font-size: 13px; margin-top: 10px; color: var(--ink); }
+.toggle input { accent-color: var(--accent); width: 16px; height: 16px; }

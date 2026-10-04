@@ -35,6 +35,8 @@ export class Rig {
   /** Знак X левой стороны человека. */
   readonly left: number;
   private readonly skeleton: THREE.Skeleton;
+  /** Последняя поза: после пересчёта привязки её нужно вернуть. */
+  private last: { pose: Pose; t: number } | null = null;
 
   constructor(body: THREE.SkinnedMesh, meta: BonesMeta) {
     this.meta = meta;
@@ -116,6 +118,7 @@ export class Rig {
     saved.decompose(this.group.position, this.group.quaternion, this.group.scale);
     parent?.add(this.group);
     this.group.updateMatrixWorld(true);
+    if (this.last) this.pose(this.last.pose, this.last.t);
   }
 
   // ------------------------------------------------------------ позы
@@ -180,6 +183,7 @@ export class Rig {
    * Возвращает, насколько опустить манекен (в осях манекена), чтобы стопы стояли на полу.
    */
   pose(pose: Pose, t = 0): number {
+    this.last = { pose, t };
     const aims: Aim[] = [];
     const flatFoot = (side: Side) => this.restDir(`foot.${side}`, `toe3-1.${side}`);
 

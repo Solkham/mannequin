@@ -5,7 +5,19 @@ import items from '../src/data/items.json' with { type: 'json' };
 import { evaluate, chipLabel, sizeName, type Item } from '../src/sizing.ts';
 import type { Figure, Gender } from '../src/body.ts';
 
-const byId = (id: string) => (items as Item[]).find((i) => i.id === id)!;
+// Сетка по замерам самой вещи: обхват изделия минус свобода облегания.
+const garmentChart: Item = {
+  ...(items as Item[])[0],
+  id: 'garment-chart',
+  charts: {
+    female: {
+      kind: 'garment',
+      ease: { chest: [8, 30] },
+      sizes: [{ label: 'S', chest: 112 }, { label: 'M', chest: 120 }, { label: 'L', chest: 128 }],
+    },
+  },
+};
+const byId = (id: string) => [...(items as Item[]), garmentChart].find((i) => i.id === id)!;
 const fig = (chest: number, waist: number, hips: number): Figure => ({ height: 168, weight: 70, chest, waist, hips });
 
 interface Case {
@@ -31,7 +43,8 @@ const cases: Case[] = [
   },
   { label: 'большой плюс-сайз, платье', item: 'dress', gender: 'female', body: fig(130, 120, 140), tone: 'bad', text: /Даже в самом большом/ },
   { label: 'маленькая фигура, платье', item: 'dress', gender: 'female', body: fig(70, 55, 75), best: '42', tone: 'warn', text: /велико/ },
-  { label: 'худи по замерам изделия', item: 'hoodie', gender: 'female', body: fig(104, 88, 112), best: 'M', tone: 'ok' },
+  { label: 'худи, двойные размеры', item: 'hoodie', gender: 'female', body: fig(104, 88, 112), best: 'L', tone: 'ok' },
+  { label: 'сетка по замерам изделия', item: 'garment-chart', gender: 'female', body: fig(104, 88, 112), best: 'M', tone: 'ok' },
   { label: 'мужчина, пуховик', item: 'puffer', gender: 'male', body: fig(100, 88, 104), best: '50', tone: 'ok' },
   { label: 'мужчина, платье', item: 'dress', gender: 'male', body: fig(100, 88, 104), none: true },
 ];
