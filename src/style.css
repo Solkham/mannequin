@@ -86,3 +86,4 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
 .toggle input { accent-color: var(--accent); width: 16px; height: 16px; }
 .uploads { display: flex; flex-wrap: wrap; gap: 8px; }
 .upload.second { background: var(--card); color: var(--accent); }
+.chip.show { font-weight: 600; }

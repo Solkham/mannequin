@@ -1,5 +1,5 @@
 import { BodyModel, ZERO_SHAPE, zoneWeights, type Figure, type Fit, type Gender, type Ring, type Shape } from './body.ts';
-import { Stage, loadBody, type LoadedBody, type Pose, type Tone, type View, type Zones } from './stage.ts';
+import { Stage, loadBody, type LoadedBody, type StagePose, type Tone, type View, type Zones } from './stage.ts';
 import { Rig, type BonesMeta } from './rig.ts';
 import { ZONE_NAME, chipLabel, evaluate, sizeName, zoneLabel, type Category, type Item, type SizeFit, type Status } from './sizing.ts';
 import { Garment, type Look } from './garment.ts';
@@ -525,12 +525,23 @@ document.querySelectorAll<HTMLButtonElement>('[data-gender]').forEach((b) => {
   b.addEventListener('click', () => showGender(b.dataset.gender as Gender));
 });
 
+function choosePose(pose: StagePose): void {
+  stage.setPose(pose);
+  document.querySelectorAll<HTMLElement>('[data-pose]').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.pose === pose)));
+}
+
 document.querySelectorAll<HTMLButtonElement>('[data-pose]').forEach((b) => {
   b.addEventListener('click', () => {
-    stage.setPose(b.dataset.pose as Pose);
-    document.querySelectorAll('[data-pose]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    // Показ смотрится спереди: камера разворачивается к подиуму.
+    if (b.dataset.pose === 'show') {
+      stage.setView('front');
+      document.querySelectorAll('[data-view]').forEach((x) => x.setAttribute('aria-pressed', String((x as HTMLElement).dataset.view === 'front')));
+    }
+    choosePose(b.dataset.pose as StagePose);
   });
 });
+// После показа манекен остаётся стоять лицом к зрителю.
+stage.onShowEnd = () => choosePose('stand');
 
 document.querySelectorAll<HTMLButtonElement>('[data-view]').forEach((b) => {
   b.addEventListener('click', () => {

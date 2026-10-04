@@ -9,6 +9,11 @@ import { Rig, type Pose } from './rig.ts';
 import type { Surroundings } from './garment.ts';
 
 export type View = 'front' | 'back' | 'left' | 'right';
+/** Позы сцены: позы скелета плюс «показ» — проход по подиуму к зрителю и поворот. */
+export type StagePose = Pose | 'show';
+
+/** Показ: длина подиума (м), скорость шага (м/с) и тайминги поворота (с). */
+const SHOW = { distance: 3.2, speed: 1.05, pause: 0.6, turnHalf: 2.2, holdBack: 1.2, holdFront: 1.0 };
 export type { Pose };
 
 const SKIN = 0xe4dbcd;
@@ -65,6 +70,7 @@ export class Stage {
   private readonly tags = new Map<Ring, HTMLSpanElement>();
   private readonly stool: THREE.Group;
   private readonly mat: THREE.Mesh;
+  private readonly runway: THREE.Mesh;
   private readonly timer = new THREE.Timer();
 
   rig: Rig | null = null;
@@ -73,7 +79,7 @@ export class Stage {
   private weights: Record<Ring, Float32Array> | null = null;
   private anchors: Record<Ring, string> | null = null;
   private zones: Zones = {};
-  private pose: Pose = 'stand';
+  private pose: StagePose = 'stand';
   private dressed = false;
   private azimuthGoal: number | null = null;
   private framedFor = '';
@@ -99,15 +105,16 @@ export class Stage {
     const key = new THREE.DirectionalLight(0xffffff, 1.6);
     key.position.set(1.2, 3, 2.2);
     key.castShadow = true;
-    key.shadow.mapSize.set(1024, 1024);
-    Object.assign(key.shadow.camera, { left: -1.4, right: 1.4, top: 1.4, bottom: -1.4, near: 0.5, far: 8 });
+    // Тень и на всей дорожке подиума.
+    key.shadow.mapSize.set(2048, 2048);
+    Object.assign(key.shadow.camera, { left: -3, right: 3, top: 3, bottom: -3, near: 0.5, far: 12 });
     key.shadow.bias = -0.0005;
     this.scene.add(key, key.target);
     const rim = new THREE.DirectionalLight(0xfff3e0, 0.7);
     rim.position.set(-2, 2.5, -2);
     this.scene.add(rim);
 
-    const floor = new THREE.Mesh(new THREE.CircleGeometry(1.6, 48), new THREE.ShadowMaterial({ opacity: 0.16 }));
+    const floor = new THREE.Mesh(new THREE.CircleGeometry(5, 64), new THREE.ShadowMaterial({ opacity: 0.16 }));
     floor.rotation.x = -Math.PI / 2;
     floor.receiveShadow = true;
     this.scene.add(floor);
@@ -129,6 +136,16 @@ export class Stage {
     }
     this.stool.visible = false;
     this.scene.add(this.stool);
+    // Дорожка подиума для показа: от глубины сцены к зрителю.
+    this.runway = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.1, SHOW.distance + 1.2),
+      new THREE.MeshStandardMaterial({ color: 0xd9cfbf, roughness: 0.95 }),
+    );
+    this.runway.rotation.x = -Math.PI / 2;
+    this.runway.position.set(0, 0.002, -SHOW.distance / 2);
+    this.runway.receiveShadow = true;
+    this.runway.visible = false;
+    this.scene.add(this.runway);
     this.mat = new THREE.Mesh(
       new THREE.BoxGeometry(0.8, 0.03, 2.1),
       new THREE.MeshStandardMaterial({ color: 0x9fb3a6, roughness: 0.9 }),
@@ -262,9 +279,14 @@ export class Stage {
     return this.fit;
   }
 
-  setPose(pose: Pose): void {
+  /** Показ закончился: манекен стоит лицом к зрителю. */
+  onShowEnd: (() => void) | null = null;
+
+  setPose(pose: StagePose): void {
     this.pose = pose;
-    this.timer.reset();
+    this.showDone = false;
+    this.timer.update();
+    this.poseStart = this.timer.getElapsed();
     this.syncRingVisibility();
     this.place(0);
     this.onPose?.();
@@ -305,11 +327,16 @@ export class Stage {
     const g = rig.group;
     g.scale.setScalar(s);
 
-    const drop = rig.pose(this.pose, t);
+    const show = this.pose === 'show' ? this.showState(t) : null;
+    const drop = rig.pose(show ? show.pose : (this.pose as Pose), show ? show.t : t);
     this.stool.visible = this.pose === 'sit';
     this.mat.visible = this.pose === 'lie';
+    this.runway.visible = this.pose === 'show';
 
-    if (this.pose === 'lie') {
+    if (show) {
+      g.rotation.set(0, show.yaw, 0);
+      g.position.set(0, (drop - minY) * s, show.z);
+    } else if (this.pose === 'lie') {
       // На спину: лицо вверх (+Z → +Y), голова от камеры. Спина на коврике.
       g.rotation.set(-Math.PI / 2, 0, 0);
       g.position.set(0, -minZ * s + 0.03, (H / 2 + minY) * s);
@@ -378,8 +405,10 @@ export class Stage {
     this.controls.update();
   }
 
+  /** Время с начала текущей позы, с. (Timer.reset() в Three.js не обнуляет getElapsed.) */
+  private poseStart = 0;
   private elapsed(): number {
-    return this.timer.getElapsed();
+    return this.timer.getElapsed() - this.poseStart;
   }
 
   /** Пол и сиденье для ткани: юбка ложится на них. */
@@ -390,9 +419,34 @@ export class Stage {
     };
   }
 
+  /**
+   * Где манекен в показе в момент t: идёт к зрителю, останавливается, поворачивается спиной,
+   * держит паузу, доворачивается лицом. Потом показ кончается сам.
+   */
+  private showState(t: number): { pose: Pose; t: number; z: number; yaw: number } {
+    const walkTime = SHOW.distance / SHOW.speed;
+    if (t < walkTime) return { pose: 'walk', t, z: -SHOW.distance + SHOW.speed * t, yaw: 0 };
+    let u = t - walkTime - SHOW.pause;
+    const ease = (x: number) => x * x * (3 - 2 * x);
+    if (u < 0) return { pose: 'stand', t: 0, z: 0, yaw: 0 };
+    if (u < SHOW.turnHalf) return { pose: 'stand', t: 0, z: 0, yaw: Math.PI * ease(u / SHOW.turnHalf) };
+    u -= SHOW.turnHalf;
+    if (u < SHOW.holdBack) return { pose: 'stand', t: 0, z: 0, yaw: Math.PI };
+    u -= SHOW.holdBack;
+    if (u < SHOW.turnHalf) return { pose: 'stand', t: 0, z: 0, yaw: Math.PI * (1 + ease(u / SHOW.turnHalf)) };
+    u -= SHOW.turnHalf;
+    if (u > SHOW.holdFront && !this.showDone) {
+      this.showDone = true;
+      queueMicrotask(() => this.onShowEnd?.());
+    }
+    return { pose: 'stand', t: 0, z: 0, yaw: 0 };
+  }
+
+  private showDone = false;
+
   private frame(): void {
     this.timer.update();
-    if (this.pose === 'walk') this.place(this.elapsed());
+    if (this.pose === 'walk' || this.pose === 'show') this.place(this.elapsed());
     if (this.fit) this.onFrame?.(Math.min(this.timer.getDelta(), 1 / 20));
     if (this.azimuthGoal !== null) {
       const cur = this.controls.getAzimuthalAngle();
