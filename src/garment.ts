@@ -192,6 +192,8 @@ export class Garment {
   private skirtTop: Float32Array | null = null;
   private skirtSkin: { index: Uint16Array; weight: Float32Array } | null = null;
   private radii = { pelvis: 0.1, thighTop: 0.09, thighKnee: 0.06, shinTop: 0.05, shinAnkle: 0.035 };
+  /** Край вещи: наружные вершины и их соседи внутри с долей t до линии края. */
+  private edge: { verts: Int32Array; start: Int32Array; nbr: Int32Array; t: Float32Array } | null = null;
   /** Профиль таза и верха бёдер под юбкой (в осях покоя). */
   private profile: Omit<Profile, 'toLocal' | 'fromLocal'> | null = null;
   private readonly restElbow = { L: 0, R: 0 };
@@ -435,80 +437,158 @@ export class Garment {
     };
   }
 
-  /** Какие вершины тела закрывает вещь. Считается один раз: части тела от формы не зависят. */
+  /**
+   * Насколько вершина внутри вещи, м: > 0 — внутри, < 0 — снаружи, 0 — ровно на краю.
+   * Края заданы непрерывно (высота подола, длина рукава по руке, линия выреза, длина
+   * штанины по бедру), а не по частям тела, — поэтому край вещи получается гладким.
+   */
+  private inside(v: number, rest: Float32Array, L: Levels): number {
+    const p = +this.parts[v];
+    if (p === P.head) return -1;
+    const x = rest[v * 3], y = rest[v * 3 + 1], z = rest[v * 3 + 2];
+    const H = L.H;
+    const arm = p === P.upperarm1 || p === P.upperarm2 || p === P.lowerarm || p === P.hand;
+    const { pos: armPos, upper, wrist } = arm ? this.armPos(v, rest) : { pos: 0, upper: 1, wrist: 1 };
+    const thigh = () => {
+      const { t, len } = this.thighAlong(v, rest);
+      return { t, len };
+    };
+    switch (this.category) {
+      case 'top':
+        return arm ? wrist - 0.005 - armPos : Math.min(y - (L.hips - 0.012 * H), L.neck + 0.012 * H - y);
+      case 'tee':
+        // Короткий рукав — до середины плеча; круглый вырез у основания шеи.
+        return arm ? 0.45 * upper - armPos : Math.min(y - L.hips, L.neck - 0.004 * H - y);
+      case 'shirt':
+        // Длинный рукав до запястья, низ навыпуск, воротник-стойка.
+        return arm ? wrist - 0.005 - armPos : Math.min(y - (L.hips - 0.005 * H), L.neck + 0.035 * H - y);
+      case 'outer':
+        // Под низом-юбкой подкладка идёт по бёдрам до 11% роста: сидя бедро не протыкает ткань.
+        return arm ? wrist - 0.005 - armPos : Math.min(y - (L.hips - 0.11 * H), L.neck + 0.03 * H - y);
+      case 'bottom':
+        return arm ? -1 : Math.min(L.waist + 0.006 * H - y, y - (L.ankle + 0.025 * H));
+      case 'shorts': {
+        // Штанина до середины бедра.
+        if (arm) return -1;
+        const th = thigh();
+        return Math.min(L.waist + 0.006 * H - y, (0.5 - th.t) * th.len);
+      }
+      case 'skirt': {
+        // Пояс по талии, ниже — подкладка по тазу и бёдрам до колен под юбкой.
+        if (arm) return -1;
+        const th = thigh();
+        return Math.min(L.waist + 0.012 * H - y, (1 - th.t) * th.len);
+      }
+      case 'dress': {
+        // Рукав-фонарик на треть плеча.
+        if (arm) return 0.35 * upper - armPos;
+        // U-образный вырез: спереди глубже и шире, чем сзади. Снаружи выреза — платье.
+        const neckline = z > 0
+          ? Math.max(
+              L.neck - 0.065 * H - y,
+              Math.abs(x) - 0.055 * H * Math.min(1, (y - (L.neck - 0.065 * H)) / (0.03 * H) + 0.35),
+            )
+          : Math.max(L.neck - 0.03 * H - y, Math.abs(x) - 0.05 * H);
+        // Лиф продолжается подкладкой по бёдрам до колен под юбкой.
+        const th = thigh();
+        return Math.min(neckline, (1 - th.t) * th.len);
+      }
+    }
+  }
+
+  /**
+   * Какие вершины тела закрывает вещь. Считается один раз: части тела от формы не зависят.
+   * Берём все треугольники, у которых внутри хотя бы одна вершина; наружные вершины таких
+   * треугольников потом сдвигаются точно на линию края (snapEdge) — край гладкий, а не по сетке.
+   */
   private cover(rest: Float32Array, L: Levels): void {
     const c = this.covered;
-    for (let v = 0; v < c.length; v++) {
-      const p = +this.parts[v];
-      const y = rest[v * 3 + 1];
-      const z = rest[v * 3 + 2];
-      let on = false;
-      // Бока таза в Anny принадлежат костям бедра, поэтому низ верха считаем по торсу и бедру вместе.
-      const hipBand = p === P.torso || p === P.upperleg;
-      const arm = p === P.upperarm1 || p === P.upperarm2 || p === P.lowerarm;
-      const armS = arm ? this.armAlong(v, rest) : 0;
-      const thighT = p === P.upperleg ? this.thighAlong(v, rest) : 0;
-      switch (this.category) {
-        case 'top':
-          on = (hipBand && y >= L.hips - 0.012 * L.H) || arm || (p === P.neck && y < L.neck + 0.012 * L.H);
-          break;
-        case 'tee':
-          // Короткий рукав — до середины плеча; круглый вырез у основания шеи.
-          on = (hipBand && y >= L.hips) || (arm && armS < 0.45);
-          break;
-        case 'shirt':
-          // Длинный рукав до запястья, низ навыпуск, воротник-стойка.
-          on = (hipBand && y >= L.hips - 0.005 * L.H) || arm || (p === P.neck && y < L.neck + 0.035 * L.H);
-          break;
-        case 'outer':
-          // Под юбкой-низом подкладка идёт по бёдрам: сидя бедро не протыкает ткань.
-          on = (hipBand && y >= L.hips - 0.11 * L.H) || arm || (p === P.neck && y < L.neck + 0.03 * L.H);
-          break;
-        case 'bottom':
-          on = (p === P.torso && y <= L.waist + 0.006 * L.H) || p === P.upperleg || (p === P.lowerleg && y >= L.ankle + 0.025 * L.H);
-          break;
-        case 'shorts':
-          // Штанина до середины бедра.
-          on = (p === P.torso && y <= L.waist + 0.006 * L.H) || (p === P.upperleg && thighT < 0.5);
-          break;
-        case 'skirt':
-          // Пояс по талии, ниже — подкладка по тазу и бёдрам под юбкой (сидя бедро не протыкает ткань).
-          on = (hipBand && y <= L.waist + 0.012 * L.H) || p === P.upperleg;
-          break;
-        case 'dress': {
-          // U-образный вырез: спереди глубже и шире, чем сзади.
-          const x = rest[v * 3];
-          const front = z > 0;
-          const inNeckline = front
-            ? y > L.neck - 0.065 * L.H && Math.abs(x) < 0.055 * L.H * Math.min(1, (y - (L.neck - 0.065 * L.H)) / (0.03 * L.H) + 0.35)
-            : y > L.neck - 0.03 * L.H && Math.abs(x) < 0.05 * L.H;
-          // Лиф продолжается подкладкой по бёдрам до колен под юбкой: сидя бедро не протыкает ткань.
-          on = ((hipBand && y >= L.hips - 0.11 * L.H) || p === P.upperleg || p === P.upperarm1) && !inNeckline;
-          break;
-        }
-      }
-      if (this.category === 'outer' && (p === P.torso || p === P.upperleg) && y < L.hips - 0.11 * L.H) on = false;
-      c[v] = on ? 1 : 0;
-    }
+    const n = c.length;
+    const f = new Float32Array(n);
+    for (let v = 0; v < n; v++) f[v] = this.inside(v, rest, L);
     const src = this.rig.meshes[0].geometry.index!.array;
     const idx: number[] = [];
-    for (let f = 0; f < src.length; f += 3) {
-      if (c[src[f]] && c[src[f + 1]] && c[src[f + 2]]) idx.push(src[f], src[f + 1], src[f + 2]);
+    c.fill(0);
+    for (let k = 0; k < src.length; k += 3) {
+      const a = src[k], b = src[k + 1], d = src[k + 2];
+      if (f[a] >= 0 || f[b] >= 0 || f[d] >= 0) {
+        idx.push(a, b, d);
+        c[a] = c[b] = c[d] = 1;
+      }
     }
     this.shell.geometry.setIndex(idx);
+
+    // Для каждой наружной вершины — соседи внутри и где между ними проходит край (доля t).
+    const pairs = new Map<number, Map<number, number>>();
+    for (let k = 0; k < idx.length; k += 3) {
+      for (let e = 0; e < 3; e++) {
+        const o = idx[k + e];
+        if (f[o] >= 0) continue;
+        for (const j of [idx[k + ((e + 1) % 3)], idx[k + ((e + 2) % 3)]]) {
+          if (f[j] < 0) continue;
+          let m = pairs.get(o);
+          if (!m) pairs.set(o, (m = new Map()));
+          m.set(j, f[o] / (f[o] - f[j]));
+        }
+      }
+    }
+    const verts: number[] = [], start: number[] = [0], nbr: number[] = [], t: number[] = [];
+    for (const [o, m] of pairs) {
+      verts.push(o);
+      for (const [j, tt] of m) {
+        nbr.push(j);
+        t.push(tt);
+      }
+      start.push(nbr.length);
+    }
+    this.edge = {
+      verts: Int32Array.from(verts), start: Int32Array.from(start), nbr: Int32Array.from(nbr), t: Float32Array.from(t),
+    };
   }
 
-  /** Доля длины плеча (от плечевого сустава к локтю) для вершины руки: 0 — плечо, 1 — локоть, >1 — предплечье. */
-  private armAlong(v: number, rest: Float32Array): number {
-    const side = rest[v * 3] * this.rig.left > 0 ? 'L' : 'R';
-    if (+this.parts[v] === P.lowerarm) return 1.5;
-    return this.segmentT(v, rest, `upperarm01.${side}`, `lowerarm01.${side}`);
+  /** Наружные вершины края — на линию края: между собой и соседями внутри, по поверхности ткани. */
+  private snapEdge(rest: Float32Array, disp: Float32Array): void {
+    const e = this.edge;
+    if (!e) return;
+    for (let q = 0; q < e.verts.length; q++) {
+      const o = e.verts[q] * 3;
+      let x = 0, y = 0, z = 0;
+      const s0 = e.start[q], s1 = e.start[q + 1];
+      for (let k = s0; k < s1; k++) {
+        const j = e.nbr[k] * 3, tt = e.t[k];
+        for (let c = 0; c < 3; c++) {
+          const po = rest[o + c] + disp[o + c], pj = rest[j + c] + disp[j + c];
+          const v = po + (pj - po) * tt;
+          if (c === 0) x += v; else if (c === 1) y += v; else z += v;
+        }
+      }
+      const inv = 1 / (s1 - s0);
+      disp[o] = x * inv - rest[o];
+      disp[o + 1] = y * inv - rest[o + 1];
+      disp[o + 2] = z * inv - rest[o + 2];
+    }
   }
 
-  /** Доля длины бедра (от тазобедренного сустава к колену) для вершины ноги. */
-  private thighAlong(v: number, rest: Float32Array): number {
+  /**
+   * Положение вершины вдоль руки, м: от плечевого сустава по плечу, дальше по предплечью.
+   * upper — длина плеча, wrist — расстояние до запястья.
+   */
+  private armPos(v: number, rest: Float32Array): { pos: number; upper: number; wrist: number } {
     const side = rest[v * 3] * this.rig.left > 0 ? 'L' : 'R';
-    return this.segmentT(v, rest, `upperleg01.${side}`, `lowerleg01.${side}`);
+    const sh = this.rig.head(`upperarm01.${side}`), el = this.rig.head(`lowerarm01.${side}`), wr = this.rig.head(`wrist.${side}`);
+    const upper = sh.distanceTo(el), lower = el.distanceTo(wr);
+    const p = +this.parts[v];
+    const pos = p === P.lowerarm || p === P.hand
+      ? upper + this.segmentT(v, rest, `lowerarm01.${side}`, `wrist.${side}`) * lower
+      : this.segmentT(v, rest, `upperarm01.${side}`, `lowerarm01.${side}`) * upper;
+    return { pos, upper, wrist: upper + lower };
+  }
+
+  /** Доля длины бедра (от тазобедренного сустава к колену) и длина бедра, м. */
+  private thighAlong(v: number, rest: Float32Array): { t: number; len: number } {
+    const side = rest[v * 3] * this.rig.left > 0 ? 'L' : 'R';
+    const a = this.rig.head(`upperleg01.${side}`), b = this.rig.head(`lowerleg01.${side}`);
+    return { t: this.segmentT(v, rest, `upperleg01.${side}`, `lowerleg01.${side}`), len: a.distanceTo(b) };
   }
 
   private segmentT(v: number, rest: Float32Array, from: string, to: string): number {
@@ -564,8 +644,8 @@ export class Garment {
       const p = +this.parts[v];
       pt.fromArray(rest, v * 3);
       const nz = normal.getZ(v);
-      const isArm = p === P.upperarm1 || p === P.upperarm2 || p === P.lowerarm;
-      const isLeg = p === P.upperleg || p === P.lowerleg;
+      const isArm = p === P.upperarm1 || p === P.upperarm2 || p === P.lowerarm || p === P.hand;
+      const isLeg = p === P.upperleg || p === P.lowerleg || p === P.foot;
       const leftSide = pt.x * r.left > 0;
       if (isArm || (isLeg && pt.y < hipY - 0.02 * L.H)) {
         const lb = isArm ? (leftSide ? limbs.armL : limbs.armR) : leftSide ? limbs.legL : limbs.legR;
@@ -727,6 +807,8 @@ export class Garment {
         disp[i] += nrm[i] * k; disp[i + 1] += nrm[i + 1] * k; disp[i + 2] += nrm[i + 2] * k;
       }
     }
+    // Гладкий край: наружные вершины — на линию края по поверхности ткани.
+    this.snapEdge(rest, disp);
     geo.getAttribute('aDisp').needsUpdate = true;
     geo.getAttribute('aHem').needsUpdate = true;
     geo.getAttribute('aTint').needsUpdate = true;
@@ -849,7 +931,7 @@ export class Garment {
         tube[v] = along[v] >= 0 ? 1 : 0;
       } else if (t >= 2) {
         const p = +this.parts[v];
-        const lower = p === P.lowerarm || p === P.lowerleg;
+        const lower = p === P.lowerarm || p === P.lowerleg || p === P.hand || p === P.foot;
         const lb = lower ? limbs[t].lower : limbs[t].upper;
         const d = pt.clone().sub(lb.a);
         const s0 = d.dot(lb.d);
@@ -965,13 +1047,22 @@ export class Garment {
         }
       }
       // Резинку низа применяем заново: перемычка не должна её растягивать.
+      // Но и резинка через впадины (между бёдрами) перекидывается, а не ныряет в них.
       for (let k = 0; k < rows; k++) {
         const a = amin + k * dy;
         const ribT = smooth(spec.ribFrom, spec.ribFrom + 0.03, a);
         if (ribT <= 0) continue;
         for (let i = 0; i < cols; i++) {
+          const th = (i / cols) * Math.PI * 2;
+          const r = body[k * cols + i] + spec.ribGap;
+          pts[i] = [Math.sin(th) * r, Math.cos(th) * r];
+        }
+        const hull = convexHull(pts);
+        for (let i = 0; i < cols; i++) {
           const j = k * cols + i;
-          fabric[j] += (body[j] + spec.ribGap - fabric[j]) * ribT;
+          const th = (i / cols) * Math.PI * 2;
+          const rib = hull.length >= 3 ? rayHull(hull, Math.sin(th), Math.cos(th)) : body[j] + spec.ribGap;
+          fabric[j] += (rib - fabric[j]) * ribT;
         }
       }
     }
