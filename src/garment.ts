@@ -121,7 +121,14 @@ const TORSO_HEM: Partial<Record<Category, number>> = { top: 0.012, tee: 0, shirt
  * Юбка: откуда висит (линия бёдер у платья и куртки, талия у юбки), подол (доля роста от пола),
  * расклёш по окружности, жёсткость ткани, заложенные складки.
  */
-const SKIRT: Partial<Record<Category, { from: 'hips' | 'waist'; hem: number; flare: number; stiffness: number; folds: number }>> = {
+const SKIRT: Partial<Record<Category, {
+  from: 'hips' | 'waist'; hem: number; flare: number; stiffness: number; folds: number;
+  /** Подол на столько ниже линии бёдер (доля роста) — вместо hem, когда длина привязана к бёдрам. */
+  belowHips?: number;
+}>> = {
+  // Низ худи — ткань от талии до резинки: резинка уже верха (flare < 1), над ней напуск;
+  // сидя ткань ложится на колени, а не обтягивает каждое бедро.
+  top: { from: 'waist', hem: 0, belowHips: 0.012, flare: 0.86, stiffness: 0.3, folds: 8 },
   dress: { from: 'hips', hem: 0.2, flare: 1.45, stiffness: 0.04, folds: 9 },
   outer: { from: 'hips', hem: 0.36, flare: 1.04, stiffness: 1, folds: 4 },
   // Рубашка навыпуск: хвост ниже бёдер, хлопок держит форму, складки редкие.
@@ -482,7 +489,8 @@ export class Garment {
     };
     switch (this.category) {
       case 'top':
-        return arm ? wrist - 0.005 - armPos : Math.min(y - (L.hips - 0.012 * H), L.neck + 0.012 * H - y);
+        // Ниже талии — подкладка под тканью низа, кончается чуть выше резинки, чтобы не выглядывать.
+        return arm ? wrist - 0.005 - armPos : Math.min(y - L.hips, L.neck + 0.012 * H - y);
       case 'tee':
         // Короткий рукав — до середины плеча; круглый вырез у основания шеи.
         return arm ? 0.45 * upper - armPos : Math.min(y - L.hips, L.neck - 0.004 * H - y);
@@ -1157,7 +1165,7 @@ export class Garment {
     // Верх юбки прячется под лиф (у платья и куртки — на линии бёдер, лиф кончается ниже)
     // или под пояс (у юбки — на талии).
     const topY = spec.from === 'waist' ? L.waist - 0.004 * L.H : L.hips + 0.005 * L.H;
-    const hemY = spec.hem * L.H;
+    const hemY = spec.belowHips !== undefined ? L.hips - spec.belowHips * L.H : spec.hem * L.H;
     const gap = this.zoneGap('hips', body, size) + BUILD[this.category].thick;
 
     const pts: [number, number][] = [];
@@ -1192,7 +1200,7 @@ export class Garment {
       const own = rayHull(hull, Math.cos(a), Math.sin(a)) + gap;
       // По поверхности верха пришиваем только низ куртки: у неё верх толстый и пышный.
       // Рубашке, тунике, платью и юбке хватает обхвата бёдер с запасом — иначе на стыке ступенька.
-      const rad = shellHull && this.category === 'outer' ? Math.max(own, rayHull(shellHull, Math.cos(a), Math.sin(a)) + 0.002) : own;
+      const rad = shellHull && (this.category === 'outer' || this.category === 'top') ? Math.max(own, rayHull(shellHull, Math.cos(a), Math.sin(a)) + 0.002) : own;
       top.set([cx + Math.cos(a) * rad, topY, cz + Math.sin(a) * rad], i * 3);
     }
     this.skirtTop = top;
@@ -1404,7 +1412,7 @@ export class Garment {
       const top = L.neck - 0.035 * L.H;
       // У рубашки навыпуск планка идёт и по хвосту до подола.
       const tail = SKIRT[this.category];
-      const bottom = tail ? tail.hem * L.H + 0.03 * L.H : L.hips - (TORSO_HEM[this.category] ?? 0.03) * L.H;
+      const bottom = tail ? (tail.belowHips !== undefined ? L.hips - tail.belowHips * L.H : tail.hem * L.H) + 0.03 * L.H : L.hips - (TORSO_HEM[this.category] ?? 0.03) * L.H;
       rect.set(0, (top + bottom) / 2, 0.04 * L.H, top - bottom);
       return;
     }
@@ -1415,7 +1423,7 @@ export class Garment {
       if (this.covered[v]) box.expandByPoint(new THREE.Vector2(pos[v * 3], pos[v * 3 + 1]));
     }
     const spec = SKIRT[this.category];
-    if (spec) box.expandByPoint(new THREE.Vector2(box.min.x, spec.hem * L.H));
+    if (spec) box.expandByPoint(new THREE.Vector2(box.min.x, spec.belowHips !== undefined ? L.hips - spec.belowHips * L.H : spec.hem * L.H));
     const c = box.getCenter(new THREE.Vector2());
     const s = box.getSize(new THREE.Vector2());
     rect.set(c.x, c.y, s.x, s.y);
