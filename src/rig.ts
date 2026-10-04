@@ -189,7 +189,8 @@ export class Rig {
 
     if (pose === 'stand' || pose === 'lie') {
       for (const side of ['L', 'R'] as Side[]) {
-        aims.push(...this.arms(side, this.down(side, 0.03, 0.13), this.down(side, 0.12, 0.08)));
+        // Руки чуть отведены: кисти не проходят сквозь юбку и низ куртки.
+        aims.push(...this.arms(side, this.down(side, 0.03, 0.2), this.down(side, 0.12, 0.2)));
       }
     } else if (pose === 'walk') {
       const phase = (t / 1.1) * Math.PI * 2;
@@ -201,7 +202,7 @@ export class Rig {
         const shin = thigh - knee;
         aims.push(...this.leg(side, this.down(side, thigh, 0.05), this.down(side, shin, 0.03), flatFoot(side)));
         const arm = -0.3 * Math.sin(p);
-        aims.push(...this.arms(side, this.down(side, arm, 0.12), this.down(side, arm + 0.25, 0.08)));
+        aims.push(...this.arms(side, this.down(side, arm, 0.2), this.down(side, arm + 0.25, 0.18)));
       }
     } else if (pose === 'sit') {
       for (const side of ['L', 'R'] as Side[]) {
@@ -231,7 +232,11 @@ export class Rig {
 
   /** Матрица кость·обратная привязка в осях манекена: переносит точку покоя в позу. */
   boneDeform(name: string, out = new THREE.Matrix4()): THREE.Matrix4 {
-    const i = this.boneIndex(name);
+    return this.boneDeformAt(this.boneIndex(name), out);
+  }
+
+  /** То же по номеру кости (как в skinIndex сетки). */
+  boneDeformAt(i: number, out = new THREE.Matrix4()): THREE.Matrix4 {
     const inv = new THREE.Matrix4().copy(this.group.matrixWorld).invert();
     return out.multiplyMatrices(inv, this.bones[i].matrixWorld).multiply(this.skeleton.boneInverses[i]);
   }

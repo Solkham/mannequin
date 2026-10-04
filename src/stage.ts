@@ -6,6 +6,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RINGS, type BodyData, type Fit, type Ring } from './body.ts';
 import { Rig, type Pose } from './rig.ts';
+import type { Surroundings } from './garment.ts';
 
 export type View = 'front' | 'back' | 'left' | 'right';
 export type { Pose };
@@ -78,6 +79,12 @@ export class Stage {
   private framedFor = '';
   /** Вызывается после смены формы тела: одежде нужно перестроиться. */
   onRebuild: (() => void) | null = null;
+  /** Каждый кадр после позы: шаг симуляции ткани. */
+  onFrame: ((dt: number) => void) | null = null;
+  /** Поза сменилась скачком (не ходьба по кадрам). */
+  onPose: (() => void) | null = null;
+  /** Верх сиденья табурета в мире (для позы «сидит»). */
+  private seatTop = new THREE.Vector3();
 
   constructor(host: HTMLElement) {
     this.host = host;
@@ -260,6 +267,7 @@ export class Stage {
     this.timer.reset();
     this.syncRingVisibility();
     this.place(0);
+    this.onPose?.();
   }
 
   setView(view: View): void {
@@ -315,6 +323,7 @@ export class Stage {
       const seatTop = (hip + drop - minY - 0.075 * H) * s;
       const back = Math.min(rig.bonePos('upperleg01.L').z, rig.bonePos('upperleg01.R').z) * s;
       this.stool.position.set(0, 0, back + 0.02);
+      this.seatTop.set(0, seatTop, back + 0.02);
       for (const c of this.stool.children) {
         if (c.name === 'seat') c.position.y = seatTop - 0.02;
         else {
@@ -373,9 +382,18 @@ export class Stage {
     return this.timer.getElapsed();
   }
 
+  /** Пол и сиденье для ткани: юбка ложится на них. */
+  surroundings(): Surroundings {
+    return {
+      floorY: this.pose === 'lie' ? 0.03 : 0,
+      seat: this.pose === 'sit' ? { center: this.seatTop.clone(), r: 0.2 } : null,
+    };
+  }
+
   private frame(): void {
     this.timer.update();
     if (this.pose === 'walk') this.place(this.elapsed());
+    if (this.fit) this.onFrame?.(Math.min(this.timer.getDelta(), 1 / 20));
     if (this.azimuthGoal !== null) {
       const cur = this.controls.getAzimuthalAngle();
       const diff = Math.atan2(Math.sin(this.azimuthGoal - cur), Math.cos(this.azimuthGoal - cur));

@@ -375,9 +375,12 @@ function rebuildGarment(): void {
     shownSize,
     { chest: h.chest.y, waist: h.waist.y, hips: h.hips.y },
     shownTints,
+    stage.surroundings(),
   );
 }
 stage.onRebuild = rebuildGarment;
+stage.onFrame = (dt) => garment?.frame(dt, stage.surroundings());
+stage.onPose = () => garment?.drapeForPose(stage.surroundings());
 
 function renderVerdict(): void {
   const item = currentItem();
@@ -508,3 +511,4 @@ document.querySelectorAll<HTMLButtonElement>('[data-view]').forEach((b) => {
 })();
 
 showGender(state.gender);
+

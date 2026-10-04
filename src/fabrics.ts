@@ -59,15 +59,15 @@ function drawFabric(fabric: Fabric): HTMLCanvasElement {
   } else if (fabric === 'quilt') {
     // Стёжка пуховика: шов и объём секции (темнее у шва, светлее посередине).
     const grad = g.createLinearGradient(0, 0, 0, S);
-    grad.addColorStop(0, 'rgba(0,0,0,0.38)');
-    grad.addColorStop(0.18, 'rgba(0,0,0,0.05)');
-    grad.addColorStop(0.5, 'rgba(255,255,255,0.12)');
-    grad.addColorStop(0.82, 'rgba(0,0,0,0.05)');
-    grad.addColorStop(1, 'rgba(0,0,0,0.38)');
+    grad.addColorStop(0, 'rgba(0,0,0,0.22)');
+    grad.addColorStop(0.15, 'rgba(0,0,0,0.04)');
+    grad.addColorStop(0.5, 'rgba(255,255,255,0.08)');
+    grad.addColorStop(0.85, 'rgba(0,0,0,0.04)');
+    grad.addColorStop(1, 'rgba(0,0,0,0.22)');
     g.fillStyle = grad;
     g.fillRect(0, 0, S, S);
-    g.fillStyle = 'rgba(0,0,0,0.55)';
-    g.fillRect(0, 0, S, 3);
+    g.fillStyle = 'rgba(0,0,0,0.4)';
+    g.fillRect(0, 0, S, 2);
   } else if (fabric === 'floral') {
     // Мелкий цветочный принт: цветы поверх цвета платья.
     const petals = ['#f6e7d8', '#f2c4c9', '#fff6e5'];

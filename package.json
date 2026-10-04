@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "test": "node --experimental-strip-types --no-warnings tests/sizing.test.ts && node --experimental-strip-types --no-warnings tests/body.test.ts",
+    "test": "node --experimental-strip-types --no-warnings tests/sizing.test.ts && node --experimental-strip-types --no-warnings tests/cloth.test.ts && node --experimental-strip-types --no-warnings tests/body.test.ts",
     "export-models": "python scripts/export_anny.py"
   },
   "dependencies": {
