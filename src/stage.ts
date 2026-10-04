@@ -333,6 +333,16 @@ export class Stage {
     this.mat.visible = this.pose === 'lie';
     this.runway.visible = this.pose === 'show';
 
+    // Камера следует за моделью по подиуму: цель и камера сдвигаются вместе с ней,
+    // ракурс, который выбрал человек (вращение, приближение), сохраняется.
+    const follow = show ? show.z : 0;
+    const dz = follow - this.followZ;
+    if (dz !== 0) {
+      this.controls.target.z += dz;
+      this.camera.position.z += dz;
+      this.followZ = follow;
+    }
+
     if (show) {
       g.rotation.set(0, show.yaw, 0);
       g.position.set(0, (drop - minY) * s, show.z);
@@ -394,7 +404,7 @@ export class Stage {
   private frameBox(height: number, centerY: number, width: number, fromAbove = false): void {
     const tan = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
     const dist = Math.max((height * 1.12) / (2 * tan), (width * 1.05) / (2 * tan * this.camera.aspect));
-    const target = new THREE.Vector3(0, centerY, 0);
+    const target = new THREE.Vector3(0, centerY, this.followZ);
     const az = this.camera.position.lengthSq() > 0 ? this.controls.getAzimuthalAngle() : 0;
     const polar = fromAbove ? Math.PI * 0.3 : Math.PI * 0.48;
     const offset = new THREE.Vector3().setFromSphericalCoords(dist, polar, az);
@@ -443,6 +453,8 @@ export class Stage {
   }
 
   private showDone = false;
+  /** Насколько камера сдвинута за моделью вдоль подиума. */
+  private followZ = 0;
 
   private frame(): void {
     this.timer.update();
