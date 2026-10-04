@@ -156,7 +156,7 @@
  },
  {
   "id": "shirt",
-  "title": "Рубашка оксфорд",
+  "title": "Рубашка оксфорд навыпуск",
   "shop": "Lamoda",
   "material": "хлопок, оксфорд",
   "category": "shirt",
@@ -302,6 +302,105 @@
       "alt": "5XL",
       "chest": 120,
       "waist": 108
+     }
+    ]
+   }
+  }
+ },
+ {
+  "id": "tunic",
+  "title": "Туника льняная",
+  "shop": "Lamoda",
+  "material": "лён",
+  "category": "tunic",
+  "fabric": "knit",
+  "stretch": 1,
+  "colors": [
+   {
+    "name": "молочный",
+    "hex": "#ece5d6"
+   },
+   {
+    "name": "терракотовый",
+    "hex": "#b4573e"
+   },
+   {
+    "name": "оливковый",
+    "hex": "#6f7350"
+   },
+   {
+    "name": "синий",
+    "hex": "#34507a"
+   }
+  ],
+  "source": "Стандартная российская размерная сетка по обхватам тела.",
+  "charts": {
+   "female": {
+    "kind": "body",
+    "spread": 2,
+    "sizes": [
+     {
+      "label": "42",
+      "alt": "XS",
+      "chest": 84,
+      "waist": 66,
+      "hips": 92
+     },
+     {
+      "label": "44",
+      "alt": "S",
+      "chest": 88,
+      "waist": 70,
+      "hips": 96
+     },
+     {
+      "label": "46",
+      "alt": "M",
+      "chest": 92,
+      "waist": 74,
+      "hips": 100
+     },
+     {
+      "label": "48",
+      "alt": "L",
+      "chest": 96,
+      "waist": 78,
+      "hips": 104
+     },
+     {
+      "label": "50",
+      "alt": "XL",
+      "chest": 100,
+      "waist": 82,
+      "hips": 108
+     },
+     {
+      "label": "52",
+      "alt": "XXL",
+      "chest": 104,
+      "waist": 86,
+      "hips": 112
+     },
+     {
+      "label": "54",
+      "alt": "3XL",
+      "chest": 108,
+      "waist": 90,
+      "hips": 116
+     },
+     {
+      "label": "56",
+      "alt": "4XL",
+      "chest": 112,
+      "waist": 94,
+      "hips": 120
+     },
+     {
+      "label": "58",
+      "alt": "5XL",
+      "chest": 116,
+      "waist": 98,
+      "hips": 124
      }
     ]
    }

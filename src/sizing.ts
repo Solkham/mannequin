@@ -33,7 +33,7 @@ export interface Chart {
 }
 
 /** Тип вещи: от него зависят форма оболочки на манекене и свобода облегания. */
-export type Category = 'top' | 'tee' | 'shirt' | 'bottom' | 'shorts' | 'skirt' | 'dress' | 'outer';
+export type Category = 'top' | 'tee' | 'shirt' | 'tunic' | 'bottom' | 'shorts' | 'skirt' | 'dress' | 'outer';
 /** Фактура ткани на манекене (src/fabrics.ts). */
 export type Fabric = 'plain' | 'knit' | 'denim' | 'quilt' | 'floral' | 'stripes' | 'plaid' | 'oxford';
 

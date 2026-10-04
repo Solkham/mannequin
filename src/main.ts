@@ -18,6 +18,7 @@ const PHOTO_BACK_KEY = 'mannequin:photo-back:v1';
 const CATEGORY_NAME: Record<Category, string> = {
   tee: 'Футболка, топ',
   shirt: 'Рубашка, блузка',
+  tunic: 'Туника, длинная блузка',
   top: 'Худи, свитшот, свитер',
   bottom: 'Брюки, джинсы',
   shorts: 'Шорты',

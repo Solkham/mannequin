@@ -25,6 +25,7 @@ const DESIGN_EASE: Record<Category, Record<Ring, number>> = {
   top: { chest: 24, waist: 28, hips: 20 },
   tee: { chest: 10, waist: 12, hips: 10 },
   shirt: { chest: 12, waist: 14, hips: 12 },
+  tunic: { chest: 14, waist: 18, hips: 16 },
   bottom: { chest: 0, waist: 1, hips: 3 },
   shorts: { chest: 0, waist: 1, hips: 5 },
   // А-силуэт: по талии в обтяжку, по бёдрам свободно.
@@ -40,6 +41,7 @@ const BUILD: Record<Category, { thick: number; sleeve: number; leg: number; coll
   tee: { thick: 0.002, sleeve: 0.016, leg: 0, collar: 0.003 },
   // Воротник-стойка отходит от шеи.
   shirt: { thick: 0.0018, sleeve: 0.016, leg: 0, collar: 0.009 },
+  tunic: { thick: 0.0018, sleeve: 0.022, leg: 0.006, collar: 0.003 },
   bottom: { thick: 0.0025, sleeve: 0, leg: 0.012, collar: 0 },
   // Штанина шорт шире бедра.
   shorts: { thick: 0.0025, sleeve: 0, leg: 0.028, collar: 0 },
@@ -89,10 +91,16 @@ const DRAPE: Record<Category, {
     leg: null, elbow: 0, knee: 0, hip: 0.006, bump: [0, 0, 0.3], stack: 0,
   },
   shirt: {
-    torso: { taper: 0.2, depth: 0.45, folds: 9, rib: null },
+    // Рубашка к низу слегка сужается по фигуре, а не висит коробкой от груди.
+    torso: { taper: 0.5, depth: 0.45, folds: 9, rib: null },
     // Манжета рубашки: плотная, над ней рукав собирается.
     sleeve: { taper: 0.4, depth: 0.45, folds: 4, rib: [0.06, 0.008] },
     leg: null, elbow: 0.01, knee: 0, hip: 0.006, bump: [0.5, 0, 0.3], stack: 0.4,
+  },
+  tunic: {
+    torso: { taper: 0.2, depth: 0.4, folds: 9, rib: null },
+    sleeve: { taper: 0.6, depth: 0.35, folds: 3, rib: null },
+    leg: null, elbow: 0.008, knee: 0, hip: 0.006, bump: [0.4, 0, 0.3], stack: 0,
   },
   shorts: {
     torso: null, sleeve: null,
@@ -107,7 +115,7 @@ const DRAPE: Record<Category, {
 
 /** Где кончается верх вещи (доля роста от линии бёдер вниз). */
 // Ниже 3% роста под линией бёдер начинается промежность: оболочка там обтянула бы каждое бедро отдельно.
-const TORSO_HEM: Partial<Record<Category, number>> = { top: 0.012, tee: 0, shirt: 0.005, outer: 0.03, dress: 0.03 };
+const TORSO_HEM: Partial<Record<Category, number>> = { top: 0.012, tee: 0, shirt: 0.03, tunic: 0.03, outer: 0.03, dress: 0.03 };
 
 /**
  * Юбка: откуда висит (линия бёдер у платья и куртки, талия у юбки), подол (доля роста от пола),
@@ -116,6 +124,10 @@ const TORSO_HEM: Partial<Record<Category, number>> = { top: 0.012, tee: 0, shirt
 const SKIRT: Partial<Record<Category, { from: 'hips' | 'waist'; hem: number; flare: number; stiffness: number; folds: number }>> = {
   dress: { from: 'hips', hem: 0.2, flare: 1.45, stiffness: 0.04, folds: 9 },
   outer: { from: 'hips', hem: 0.36, flare: 1.04, stiffness: 1, folds: 4 },
+  // Рубашка навыпуск: хвост ниже бёдер, хлопок держит форму, складки редкие.
+  shirt: { from: 'hips', hem: 0.355, flare: 1.15, stiffness: 0.12, folds: 7 },
+  // Туника до середины бедра: свободный клёш, ткань мягкая.
+  tunic: { from: 'hips', hem: 0.33, flare: 1.35, stiffness: 0.08, folds: 8 },
   // Юбка до колена: шерсть плотнее вискозы, складки крупнее.
   skirt: { from: 'waist', hem: 0.29, flare: 1.6, stiffness: 0.12, folds: 8 },
 };
@@ -475,8 +487,12 @@ export class Garment {
         // Короткий рукав — до середины плеча; круглый вырез у основания шеи.
         return arm ? 0.45 * upper - armPos : Math.min(y - L.hips, L.neck - 0.004 * H - y);
       case 'shirt':
-        // Длинный рукав до запястья, низ навыпуск, воротник-стойка.
-        return arm ? wrist - 0.005 - armPos : Math.min(y - (L.hips - 0.005 * H), L.neck + 0.035 * H - y);
+        // Длинный рукав до запястья, воротник-стойка. Низ навыпуск — тканью (SKIRT),
+        // под ним подкладка по бёдрам: сидя бедро не протыкает хвост рубашки.
+        return arm ? wrist - 0.005 - armPos : Math.min(y - (L.hips - 0.11 * H), L.neck + 0.035 * H - y);
+      case 'tunic':
+        // Рукав три четверти, круглый вырез; низ до середины бедра — тканью, подкладка по бёдрам.
+        return arm ? upper + 0.55 * (wrist - upper) - armPos : Math.min(y - (L.hips - 0.11 * H), L.neck - 0.004 * H - y);
       case 'outer':
         // Под низом-юбкой подкладка идёт по бёдрам до 11% роста: сидя бедро не протыкает ткань.
         return arm ? wrist - 0.005 - armPos : Math.min(y - (L.hips - 0.11 * H), L.neck + 0.03 * H - y);
@@ -726,7 +742,7 @@ export class Garment {
       const ribFrom = rib ? hemA - rib[0] : Infinity;
       // Перемычка и подъём ткани от груди к плечам: у свободных вещей сильнее, у рубашки и футболки слабее,
       // у платья нет (лиф по фигуре).
-      const TAPER_UP: Partial<Record<Category, number>> = { outer: 0.35, top: 0.5, tee: 0.9, shirt: 0.8 };
+      const TAPER_UP: Partial<Record<Category, number>> = { outer: 0.35, top: 0.5, tee: 0.9, shirt: 0.8, tunic: 0.8 };
       this.shapeTube(1, c, target, hem, {
         gap: (a) => torsoGap(topRef - a, L, gap),
         taper: () => t.taper, ribFrom, ribGap: rib ? rib[1] : 0, folds: t.folds, depth: t.depth,
@@ -773,9 +789,16 @@ export class Garment {
       else if (c.tube[v] >= 4) o = THREE.MathUtils.lerp(gap.hips, b.leg, THREE.MathUtils.clamp((L.hips - y) / Math.max(0.01, L.hips - L.knee), 0, 1));
       else o = b.sleeve;
 
+      // Подкладка под тканью низа (юбка, хвост рубашки, низ куртки) прилегает к телу:
+      // она не должна свисать и выглядывать поверх ткани.
+      const tail = SKIRT[this.category];
+      const tailTop = tail ? (tail.from === 'waist' ? L.waist : L.hips) : -Infinity;
+      const lining = tail && (p === P.torso || p === P.upperleg || p === P.lowerleg) && y < tailTop - 0.01 * L.H;
+      if (lining) o = 0.003;
+
       let w = 0;
       let radial = 0;
-      if (target[v] >= 0) {
+      if (target[v] >= 0 && !lining) {
         // У самого верха трубки (плечи, верх груди) поверхности, смотрящие «вверх» по ней,
         // двигаем по нормали: ткань на них лежит. Ниже — всё к целевому радиусу: ткань свисает.
         const ax = c.axis[v * 3], ay = c.axis[v * 3 + 1], az = c.axis[v * 3 + 2];
@@ -807,7 +830,7 @@ export class Garment {
     }
     // Свободные вещи сглаживаем сильнее (ткань перекрывает впадины), облегающие — слегка.
     // Пуховик жёсткий: почти не повторяет рельеф тела.
-    const SMOOTH: Partial<Record<Category, number>> = { outer: 40, top: 20, tee: 12, shirt: 12 };
+    const SMOOTH: Partial<Record<Category, number>> = { outer: 40, top: 20, tee: 12, shirt: 12, tunic: 12 };
     this.smoothSurface(rest, disp, SMOOTH[this.category] ?? 6);
     // Ткань не бывает внутри тела: где она прилегает, не ближе к коже, чем её толщина.
     // Где ткань висит далеко от кожи (над пупком, под грудью), это правило не нужно.
@@ -1158,7 +1181,7 @@ export class Garment {
     for (let v = 0; v < this.covered.length; v++) {
       if (!this.covered[v]) continue;
       const p = +this.parts[v];
-      if (p !== P.torso && p !== P.upperleg) continue;
+      if (p !== P.torso) continue;
       const y = rest[v * 3 + 1] + disp[v * 3 + 1];
       if (Math.abs(y - topY) < 0.012 * L.H) shellPts.push([rest[v * 3] + disp[v * 3] - cx, rest[v * 3 + 2] + disp[v * 3 + 2] - cz]);
     }
@@ -1167,7 +1190,9 @@ export class Garment {
     for (let i = 0; i < COLS; i++) {
       const a = (i / COLS) * Math.PI * 2;
       const own = rayHull(hull, Math.cos(a), Math.sin(a)) + gap;
-      const rad = shellHull ? Math.max(own, rayHull(shellHull, Math.cos(a), Math.sin(a)) + 0.002) : own;
+      // По поверхности верха пришиваем только низ куртки: у неё верх толстый и пышный.
+      // Рубашке, тунике, платью и юбке хватает обхвата бёдер с запасом — иначе на стыке ступенька.
+      const rad = shellHull && this.category === 'outer' ? Math.max(own, rayHull(shellHull, Math.cos(a), Math.sin(a)) + 0.002) : own;
       top.set([cx + Math.cos(a) * rad, topY, cz + Math.sin(a) * rad], i * 3);
     }
     this.skirtTop = top;
@@ -1200,7 +1225,8 @@ export class Garment {
     // Радиусы тела для столкновений: таз (по глубине), бедро, голень.
     const depth = Math.max(...hull.map((q) => Math.abs(q[1])));
     this.radii.pelvis = depth * 0.95;
-    this.radii.thighTop = this.limbRadius(rest, P.upperleg, 0.12);
+    // Не у самого сустава: там к бедру относятся и ягодицы, капсула вышла бы шире таза.
+    this.radii.thighTop = this.limbRadius(rest, P.upperleg, 0.25);
     this.radii.thighKnee = this.limbRadius(rest, P.upperleg, 0.9);
     this.radii.shinTop = this.limbRadius(rest, P.lowerleg, 0.1);
     this.radii.shinAnkle = this.limbRadius(rest, P.lowerleg, 0.9);
@@ -1238,8 +1264,10 @@ export class Garment {
   /** Профиль тела от пояса юбки вниз на 14% роста: по каждой высоте и углу — до кожи. */
   private hipProfile(rest: Float32Array, L: Levels, topY: number, cx: number, cz: number) {
     // От пояса юбки до низа ягодиц: у юбки от талии это длиннее, чем у платья от бёдер.
-    const span = Math.max(0.14 * L.H, topY - (L.hips - 0.12 * L.H));
-    const rows = Math.round(span / (0.01 * L.H)), cols = 48;
+    // Только до промежности: ниже в покое (A-поза) ноги разведены, и профиль распирал бы ткань
+    // в стороны. Там ткань держат капсулы ног, которые идут за позой.
+    const span = Math.max(0.04 * L.H, topY - (L.hips - 0.03 * L.H));
+    const rows = Math.max(3, Math.round(span / (0.01 * L.H))), cols = 48;
     const dy = span / (rows - 1);
     const radii = new Float32Array(rows * cols);
     for (let k = 0; k < rows; k++) {
@@ -1262,23 +1290,25 @@ export class Garment {
 
   /** Радиус ноги на доле её длины (по вершинам части тела вокруг оси сустава). */
   private limbRadius(rest: Float32Array, part: number, at: number): number {
+    // Меряем по всем вершинам ноги, а не только закрытым вещью: рубашке тоже нужны ноги для хвоста.
     const ds: number[] = [];
+    const upper = part === P.upperleg;
     for (let v = 0; v < this.covered.length; v++) {
-      if (+this.parts[v] !== part || this.limbLen[v] === 0) continue;
-      const t = this.along[v] / this.limbLen[v];
-      if (Math.abs(t - at) > 0.05) continue;
+      if (+this.parts[v] !== part) continue;
       const side = rest[v * 3] * this.rig.left > 0 ? 'L' : 'R';
-      const a = this.rig.head(part === P.upperleg ? `upperleg01.${side}` : `lowerleg01.${side}`);
-      const b = this.rig.head(part === P.upperleg ? `lowerleg01.${side}` : `foot.${side}`);
-      const dir = b.clone().sub(a).normalize();
+      const from = upper ? `upperleg01.${side}` : `lowerleg01.${side}`;
+      const to = upper ? `lowerleg01.${side}` : `foot.${side}`;
+      if (Math.abs(this.segmentT(v, rest, from, to) - at) > 0.05) continue;
+      const a = this.rig.head(from);
+      const dir = this.rig.head(to).sub(a).normalize();
       const d = new THREE.Vector3().fromArray(rest, v * 3).sub(a);
       d.addScaledVector(dir, -d.dot(dir));
       ds.push(d.length());
     }
-    if (!ds.length) return part === P.upperleg ? 0.08 : 0.05;
+    if (!ds.length) return upper ? 0.08 : 0.05;
     ds.sort((x, y) => x - y);
     // По внешнему краю: ткань не должна проваливаться в ногу (бедро не круглое).
-    return ds[Math.floor(ds.length * 0.95)] + 0.006;
+    return ds[Math.floor(ds.length * 0.95)] + 0.012;
   }
 
   private makeSkirtMesh(): void {
@@ -1372,7 +1402,9 @@ export class Garment {
     if (this.printRect === 'placket') {
       // Планка с пуговицами: по центру спереди от низа рубашки до воротника.
       const top = L.neck - 0.035 * L.H;
-      const bottom = L.hips - (TORSO_HEM[this.category] ?? 0.03) * L.H;
+      // У рубашки навыпуск планка идёт и по хвосту до подола.
+      const tail = SKIRT[this.category];
+      const bottom = tail ? tail.hem * L.H + 0.03 * L.H : L.hips - (TORSO_HEM[this.category] ?? 0.03) * L.H;
       rect.set(0, (top + bottom) / 2, 0.04 * L.H, top - bottom);
       return;
     }
