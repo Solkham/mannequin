@@ -84,3 +84,5 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
 .upload { justify-self: start; cursor: pointer; background: var(--accent); color: #fff; border-color: var(--accent); }
 .toggle { display: flex; gap: 8px; align-items: center; font-size: 13px; margin-top: 10px; color: var(--ink); }
 .toggle input { accent-color: var(--accent); width: 16px; height: 16px; }
+.uploads { display: flex; flex-wrap: wrap; gap: 8px; }
+.upload.second { background: var(--card); color: var(--accent); }

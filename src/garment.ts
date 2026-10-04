@@ -131,6 +131,8 @@ export interface Look {
   fabric: Fabric;
   /** Принт спереди: картинка и где она на теле (центр x, y и ширина в м, в осях манекена). */
   print: { image: CanvasImageSource; rect: PrintRect } | null;
+  /** Фото вещи со спины: ложится на спинку на ту же рамку, что и фото спереди, зеркально. */
+  back?: CanvasImageSource | null;
 }
 
 /** Что вокруг ткани в мире: пол и сиденье (в мировых координатах сцены). */
@@ -162,6 +164,8 @@ export class Garment {
     uPrint: { value: null as THREE.Texture | null },
     uPrintRect: { value: new THREE.Vector4(0, 1, 0.2, 0.2) },
     uHasPrint: { value: 0 },
+    uPrintBack: { value: null as THREE.Texture | null },
+    uHasBack: { value: 0 },
     uTintOn: { value: 1 },
     uBend: { value: new THREE.Vector4() },
     uHip: { value: 0 },
@@ -270,6 +274,17 @@ export class Garment {
       this.uniforms.uHasPrint.value = 0;
     }
     old?.dispose();
+    const oldBack = this.uniforms.uPrintBack.value;
+    if (look.back) {
+      const tex = new THREE.CanvasTexture(look.back as HTMLCanvasElement);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      this.uniforms.uPrintBack.value = tex;
+      this.uniforms.uHasBack.value = 1;
+    } else {
+      this.uniforms.uPrintBack.value = null;
+      this.uniforms.uHasBack.value = 0;
+    }
+    oldBack?.dispose();
     this.updatePrintRect();
   }
 
@@ -1449,6 +1464,8 @@ uniform float uFabricScale;
 uniform sampler2D uPrint;
 uniform vec4 uPrintRect;
 uniform float uHasPrint;
+uniform sampler2D uPrintBack;
+uniform float uHasBack;
 uniform float uTintOn;
 ${common}
 ${cloth ? '' : 'varying vec4 vJoint;\nvarying float vHem;\nvarying vec3 vAxisView;'}`)
@@ -1464,6 +1481,16 @@ if (uHasPrint > 0.5 && vRestN.z > 0.0) {
   if (puv.x > 0.0 && puv.x < 1.0 && puv.y > 0.0 && puv.y < 1.0) {
     vec4 pr = texture2D(uPrint, puv);
     col = mix(col, pr.rgb, pr.a * smoothstep(0.0, 0.25, vRestN.z));
+  }
+}
+// Спинка: фото сзади на ту же рамку, зеркально — на снимке со спины левый край кадра
+// это левый бок человека, то есть +X манекена.
+if (uHasBack > 0.5 && vRestN.z < 0.0) {
+  vec2 buv = (vRest.xy - uPrintRect.xy) / uPrintRect.zw + 0.5;
+  buv.x = 1.0 - buv.x;
+  if (buv.x > 0.0 && buv.x < 1.0 && buv.y > 0.0 && buv.y < 1.0) {
+    vec4 pb = texture2D(uPrintBack, buv);
+    col = mix(col, pb.rgb, pb.a * smoothstep(0.0, 0.25, -vRestN.z));
   }
 }
 col = mix(col, vTint.rgb, vTint.a * uTintOn);
@@ -1492,7 +1519,7 @@ diffuseColor.rgb *= col;`);
       }
       shader.fragmentShader = fs;
     };
-    m.customProgramCacheKey = () => (cloth ? 'garment-cloth-v3' : 'garment-shell-v3');
+    m.customProgramCacheKey = () => (cloth ? 'garment-cloth-v4' : 'garment-shell-v4');
     return m;
   }
 }

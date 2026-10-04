@@ -13,6 +13,7 @@ const ITEMS = itemsJson as Item[];
 const MODELS = `${import.meta.env.BASE_URL}models/`;
 const STORAGE_KEY = 'mannequin:figure:v1';
 const PHOTO_KEY = 'mannequin:photo:v1';
+const PHOTO_BACK_KEY = 'mannequin:photo-back:v1';
 
 const CATEGORY_NAME: Record<Category, string> = {
   tee: 'Футболка, топ',
@@ -204,6 +205,8 @@ let pickedSize: string | null = null;
 const ZONE_TONE: Record<Status, Tone> = { ok: 'ok', snug: 'warn', loose: 'warn', big: 'warn', tight: 'bad' };
 
 let photo: PhotoPrint | null = null;
+/** Фото вещи со спины (необязательно): без него спинка — основного цвета с переднего фото. */
+let photoBack: PhotoPrint | null = null;
 let photoVersion = 0;
 
 /** Своя вещь: стандартная сетка выбранного типа, цвет и рисунок — с фото человека. */
@@ -213,7 +216,7 @@ function customItem(): Item {
     ...base,
     id: 'custom',
     title: 'Своя вещь',
-    shop: photo ? 'по вашему фото' : 'загрузите фото',
+    shop: photo && photoBack ? 'по вашим фото' : photo ? 'по вашему фото' : 'загрузите фото',
     material: CATEGORY_NAME[state.custom].toLowerCase(),
     fabric: 'plain',
     print: undefined,
@@ -263,8 +266,12 @@ function renderExtras(): void {
     extrasBox.innerHTML = `
       <div class="custom">
         <label class="field">Тип вещи <select id="custom-type"></select></label>
-        <label class="upload chip">Загрузить фото вещи<input id="custom-photo" type="file" accept="image/*" hidden></label>
-        <p class="hint">Фото спереди на светлом однотонном фоне: вещь лежит или висит. Цвет и рисунок перейдут на манекен. Фото остаётся у вас на устройстве.</p>
+        <div class="uploads">
+          <label class="upload chip">${photo ? 'Заменить фото спереди' : 'Фото спереди'}<input id="custom-photo" type="file" accept="image/*" hidden></label>
+          <label class="upload chip second">${photoBack ? 'Заменить фото сзади' : 'Фото сзади'}<input id="custom-photo-back" type="file" accept="image/*" hidden></label>
+          ${photoBack ? '<button class="chip" id="custom-photo-back-clear">Убрать фото сзади</button>' : ''}
+        </div>
+        <p class="hint">Фото на светлом однотонном фоне: вещь лежит или висит. Спереди — рисунок переда, сзади (необязательно) — рисунок спинки; без него спинка будет основного цвета. Цвет и рисунок перейдут на манекен. Фото остаются у вас на устройстве.</p>
       </div>`;
     const sel = extrasBox.querySelector<HTMLSelectElement>('#custom-type')!;
     for (const [k, v] of Object.entries(CATEGORY_NAME)) sel.add(new Option(v, k, false, k === state.custom));
@@ -284,6 +291,30 @@ function renderExtras(): void {
         localStorage.setItem(PHOTO_KEY, photo.canvas.toDataURL('image/png'));
       } catch {
         // Не влезло в хранилище: фото будет до перезагрузки.
+      }
+      renderItems();
+      renderVerdict();
+    });
+    extrasBox.querySelector<HTMLInputElement>('#custom-photo-back')!.addEventListener('change', async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      photoBack = await loadPhoto(file);
+      photoVersion++;
+      try {
+        localStorage.setItem(PHOTO_BACK_KEY, photoBack.canvas.toDataURL('image/png'));
+      } catch {
+        // Не влезло в хранилище: фото будет до перезагрузки.
+      }
+      renderItems();
+      renderVerdict();
+    });
+    extrasBox.querySelector('#custom-photo-back-clear')?.addEventListener('click', () => {
+      photoBack = null;
+      photoVersion++;
+      try {
+        localStorage.removeItem(PHOTO_BACK_KEY);
+      } catch {
+        // Нет хранилища: ничего не делаем.
       }
       renderItems();
       renderVerdict();
@@ -328,7 +359,12 @@ let shownTints: Partial<Record<Ring, number>> = {};
 
 function lookFor(item: Item): Look {
   if (item.id === 'custom') {
-    return { color: photo?.color ?? '#8a8f99', fabric: 'plain', print: photo ? { image: photo.canvas, rect: 'front' } : null };
+    return {
+      color: photo?.color ?? photoBack?.color ?? '#8a8f99',
+      fabric: 'plain',
+      print: photo ? { image: photo.canvas, rect: 'front' } : null,
+      back: photoBack?.canvas ?? null,
+    };
   }
   const color = item.colors[state.colors[item.id] ?? 0]?.hex ?? item.colors[0].hex;
   const light = parseInt(color.slice(1, 3), 16) + parseInt(color.slice(3, 5), 16) + parseInt(color.slice(5, 7), 16) > 420;
@@ -506,8 +542,10 @@ document.querySelectorAll<HTMLButtonElement>('[data-view]').forEach((b) => {
 (async () => {
   try {
     const url = localStorage.getItem(PHOTO_KEY);
-    if (url) {
-      photo = await loadPhoto(url, false);
+    const backUrl = localStorage.getItem(PHOTO_BACK_KEY);
+    if (url) photo = await loadPhoto(url, false);
+    if (backUrl) photoBack = await loadPhoto(backUrl, false);
+    if (url || backUrl) {
       photoVersion++;
       renderItems();
       renderVerdict();
