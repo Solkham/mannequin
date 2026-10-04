@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Манекен — превью макета</title>
+<style>
+  :root {
+    --bg: #f4f1ec; --card: #fffdf9; --ink: #1d1b19; --mute: #6f6a63; --line: #e2dcd2;
+    --accent: #2f4a3a;
+    --ok: #2e7d4f; --ok-bg: #e4f1e8;
+    --warn: #a86a00; --warn-bg: #fbefd5;
+    --bad: #b3372c; --bad-bg: #f8e1de;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { font: 16px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--ink); }
+  header { padding: 20px 24px 8px; display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  h1 { font-size: 20px; font-weight: 650; letter-spacing: -0.01em; }
+  .note { font-size: 13px; color: var(--mute); }
+  main { display: grid; grid-template-columns: minmax(300px, 1fr) minmax(320px, 440px); gap: 20px; padding: 12px 24px 32px; max-width: 1100px; margin: 0 auto; }
+  @media (max-width: 760px) { main { grid-template-columns: 1fr; padding: 8px 14px 28px; } }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px; }
+  h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--mute); margin-bottom: 12px; }
+
+  /* сцена манекена: в боевой версии здесь canvas Three.js */
+  .stage { position: relative; min-height: 520px; display: grid; place-items: center; overflow: hidden;
+    background: radial-gradient(120% 90% at 50% 35%, #fffdf9 0%, #ece6db 70%, #e0d8ca 100%); }
+  @media (max-width: 760px) { .stage { min-height: 420px; } }
+  .body { width: 150px; height: 430px; position: relative; filter: drop-shadow(0 18px 20px rgba(60,50,35,.18)); }
+  .body i { position: absolute; left: 50%; transform: translateX(-50%); background: linear-gradient(90deg, #cfc6b8, #e9e3d8 45%, #cfc6b8); display: block; }
+  .head { top: 0; width: 46px; height: 56px; border-radius: 50%; }
+  .neck { top: 52px; width: 20px; height: 22px; }
+  .torso { top: 70px; width: 112px; height: 170px; border-radius: 44px 44px 30px 30px; }
+  .hips { top: 215px; width: 124px; height: 70px; border-radius: 30px 30px 40px 40px; }
+  .legL, .legR { top: 270px; width: 44px; height: 160px; border-radius: 22px 22px 14px 14px; }
+  .legL { margin-left: -28px; } .legR { margin-left: 28px; }
+  /* подсветка зон по вердикту: цвет + подпись, чтобы не только цветом */
+  .zone { position: absolute; left: 50%; transform: translateX(-50%); height: 26px; border-radius: 13px; opacity: .85; }
+  .zone-chest { top: 100px; width: 120px; background: var(--ok); }
+  .zone-waist { top: 168px; width: 104px; background: var(--warn); }
+  .zone-hips  { top: 232px; width: 130px; background: var(--bad); }
+  .tag { position: absolute; font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; border: 1px solid; background: var(--card); white-space: nowrap; }
+  .tag.ok { color: var(--ok); border-color: var(--ok); } .tag.warn { color: var(--warn); border-color: var(--warn); } .tag.bad { color: var(--bad); border-color: var(--bad); }
+  .t-chest { left: 62%; top: calc(50% - 150px); } .t-waist { left: 62%; top: calc(50% - 82px); } .t-hips { left: 62%; top: calc(50% - 18px); }
+  @media (max-width: 760px) { .t-chest, .t-waist, .t-hips { left: 58%; } .stage { min-height: 470px; } .body { margin-bottom: 70px; } }
+  .stage-label { position: absolute; left: 14px; bottom: 12px; font-size: 12px; color: var(--mute); max-width: 70%; }
+  .stage-actions { position: absolute; right: 12px; bottom: 10px; display: flex; gap: 6px; }
+  @media (max-width: 760px) { .stage-label { bottom: 52px; max-width: calc(100% - 28px); } .stage-actions { left: 12px; right: auto; } }
+  button { font: inherit; cursor: pointer; }
+  .chip { border: 1px solid var(--line); background: var(--card); border-radius: 999px; padding: 6px 12px; font-size: 13px; color: var(--ink); }
+  .chip[aria-pressed="true"] { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+  .stack { display: grid; gap: 16px; align-content: start; }
+  .row { display: grid; grid-template-columns: 88px 1fr 56px; gap: 10px; align-items: center; padding: 6px 0; }
+  .row label { font-size: 14px; }
+  .row output { text-align: right; font-variant-numeric: tabular-nums; font-size: 14px; color: var(--mute); }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; margin-bottom: 8px; }
+  .seg button { border: 0; background: transparent; padding: 7px 16px; font-size: 14px; }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+
+  .items { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .item { text-align: left; border: 1px solid var(--line); background: var(--card); border-radius: 12px; padding: 10px 12px; }
+  .item[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(47,74,58,.18); }
+  .item b { display: block; font-size: 14px; } .item span { font-size: 12px; color: var(--mute); }
+
+  .verdict { border-radius: 12px; padding: 14px; background: var(--warn-bg); border: 1px solid #ecd49b; }
+  .verdict h3 { font-size: 18px; letter-spacing: -.01em; }
+  .verdict p { font-size: 14px; color: #5b4300; margin-top: 4px; }
+  .sizes { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-top: 12px; }
+  .size { border-radius: 10px; padding: 8px 0; text-align: center; font-size: 14px; font-weight: 600; border: 1px solid var(--line); background: var(--card); }
+  .size small { display: block; font-weight: 500; font-size: 11px; margin-top: 2px; }
+  .size.ok { background: var(--ok-bg); border-color: var(--ok); color: var(--ok); }
+  .size.warn { background: var(--warn-bg); color: var(--warn); } .size.bad { background: var(--bad-bg); color: var(--bad); }
+  .size.best { box-shadow: 0 0 0 2px var(--ok); }
+  .src { font-size: 12px; color: var(--mute); margin-top: 10px; }
+  .priv { font-size: 12px; color: var(--mute); text-align: center; padding: 4px 8px 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Мой манекен</h1>
+  <span class="note">Макет экрана на одобрение. Фигура ниже — заглушка, в версии для людей здесь живая 3D-модель.</span>
+</header>
+<main>
+  <section class="card stage" aria-label="Манекен">
+    <div class="body" role="img" aria-label="Заглушка манекена">
+      <i class="head"></i><i class="neck"></i><i class="torso"></i><i class="hips"></i><i class="legL"></i><i class="legR"></i>
+      <span class="zone zone-chest"></span><span class="zone zone-waist"></span><span class="zone zone-hips"></span>
+    </div>
+    <span class="tag ok t-chest">Грудь: подходит</span>
+    <span class="tag warn t-waist">Талия: впритык</span>
+    <span class="tag bad t-hips">Бёдра: мало</span>
+    <p class="stage-label">Подсветка показывает, где вещь будет тесной или свободной. Цвет всегда дублируется словом.</p>
+    <div class="stage-actions"><button class="chip" aria-pressed="true">Спереди</button><button class="chip" aria-pressed="false">Сбоку</button></div>
+  </section>
+
+  <div class="stack">
+    <section class="card">
+      <h2>Моя фигура</h2>
+      <div class="seg" role="group" aria-label="Пол"><button aria-pressed="true">Женская</button><button aria-pressed="false">Мужская</button></div>
+      <div class="row"><label for="h">Рост</label><input id="h" type="range" min="140" max="210" value="168"><output>168 см</output></div>
+      <div class="row"><label for="w">Вес</label><input id="w" type="range" min="35" max="180" value="82"><output>82 кг</output></div>
+      <div class="row"><label for="c">Грудь</label><input id="c" type="range" min="70" max="150" value="104"><output>104 см</output></div>
+      <div class="row"><label for="t">Талия</label><input id="t" type="range" min="55" max="140" value="88"><output>88 см</output></div>
+      <div class="row"><label for="p">Бёдра</label><input id="p" type="range" min="75" max="160" value="112"><output>112 см</output></div>
+      <p class="priv">Данные остаются на вашем устройстве и никуда не отправляются.</p>
+    </section>
+
+    <section class="card">
+      <h2>Вещь</h2>
+      <div class="items">
+        <button class="item" aria-pressed="false"><b>Худи оверсайз</b><span>Wildberries · хлопок</span></button>
+        <button class="item" aria-pressed="true"><b>Джинсы прямые</b><span>Ozon · деним</span></button>
+        <button class="item" aria-pressed="false"><b>Платье миди</b><span>Lamoda · вискоза</span></button>
+        <button class="item" aria-pressed="false"><b>Пуховик</b><span>Wildberries · пух</span></button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Подойдёт ли размер</h2>
+      <div class="verdict">
+        <h3>Лучше взять 48 (L)</h3>
+        <p>В 46 будут тесны бёдра на 3 см. В 50 свободно в талии на 4 см, зато бёдра сядут спокойно.</p>
+        <div class="sizes" aria-label="Размеры">
+          <div class="size bad">44<small>мало</small></div>
+          <div class="size bad">46<small>тесно</small></div>
+          <div class="size ok best">48<small>лучший</small></div>
+          <div class="size warn">50<small>свободно</small></div>
+          <div class="size warn">52<small>велико</small></div>
+        </div>
+      </div>
+      <p class="src">Размерная сетка продавца с карточки Ozon, переписана вручную. Это подсказка по обхватам, а не гарантия.</p>
+    </section>
+  </div>
+</main>
+</body>
+</html>
