@@ -139,8 +139,10 @@ const SKIRT: Partial<Record<Category, {
   skirt: { from: 'waist', hem: 0.29, flare: 1.6, stiffness: 0.12, folds: 8 },
 };
 
-const COLS = 96;
-const ROWS = 22;
+// Сетка ткани юбки. На телефонах (палец вместо мыши) — реже: в 2 раза меньше частиц.
+const MOBILE = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+const COLS = MOBILE ? 64 : 96;
+const ROWS = MOBILE ? 16 : 22;
 
 /** Где принт: нашивка на груди, вся передняя часть (фото), планка с пуговицами по центру. */
 export type PrintRect = 'chest' | 'front' | 'placket';
@@ -210,6 +212,10 @@ export class Garment {
   private tube: Int8Array;
 
   private cloth: Cloth | null = null;
+  /** Разбудить ткань на следующем кадре (сменились форма или поза). */
+  private wake = true;
+  /** Сколько секунд тело не двигалось. */
+  private still = 0;
   private skirt: THREE.Mesh | null = null;
   /** Верхнее кольцо юбки в покое и кости, за которыми оно идёт (как ближайшая вершина лифа). */
   private skirtTop: Float32Array | null = null;
@@ -333,6 +339,7 @@ export class Garment {
     }
     this.offsets(rest, L, body, size, tints);
     this.buildSkirt(rest, L, body, size, around);
+    this.wake = true;
     this.updatePrintRect();
   }
 
@@ -348,10 +355,23 @@ export class Garment {
     u.uHip.value = (this.hipFlex('L') + this.hipFlex('R')) / 2;
 
     if (this.cloth && this.skirt && this.skirtTop) {
-      this.cloth.setPins(this.posedTop());
+      const cloth = this.cloth;
+      const pinsMoved = cloth.setPins(this.posedTop());
+      // Сон: тело не двигается 1.5 с (или ткань осела раньше) — не считаем. Экономит телефон
+      // и убирает мелкое дрожание ткани, когда столкновения спорят с нитками.
+      this.still = pinsMoved < 1e-5 && !this.wake ? this.still + dt : 0;
+      if (this.still > 1.5 || (this.still > 0.3 && cloth.lastMotion < 5e-5)) return;
+      this.wake = false;
+      const t0 = performance.now();
       const env = this.env(around);
-      const steps = Math.min(2, Math.max(1, Math.round(dt * 60)));
-      for (let s = 0; s < steps; s++) this.cloth.step(1 / 60, env);
+      // Шагов столько, сколько 1/60 с уложилось в кадр (до 3): иначе на медленном кадре тело
+      // уходит далеко вперёд и ткань раздувается. Экономим не на шагах, а на проходах по ниткам.
+      const steps = Math.min(3, Math.max(1, Math.round(dt * 60)));
+      for (let s = 0; s < steps; s++) cloth.step(1 / 60, env);
+      // Подстройка под устройство: держим расчёт ткани около 6 мс на кадр.
+      const ms = (performance.now() - t0) / steps;
+      if (ms * steps > 8 && cloth.iterations > 5) cloth.iterations--;
+      else if (ms * steps < 4 && cloth.iterations < 10) cloth.iterations++;
       const geo = this.skirt.geometry;
       geo.getAttribute('position').needsUpdate = true;
       geo.computeVertexNormals();
@@ -428,6 +448,7 @@ export class Garment {
       }
     }
     cloth.settle(this.env(around), 60);
+    this.wake = true;
   }
 
   // ------------------------------------------------------------ сгибы

@@ -10,6 +10,37 @@ import itemsJson from './data/items.json';
 
 const ITEMS = itemsJson as Item[];
 
+/**
+ * Замер скорости: откройте сайт с ?perf — раз в 3 с в консоль идут средние времена
+ * (подгонка фигуры, шаг ткани, кадры в секунду). Для проверки на телефоне.
+ */
+const perf = new URLSearchParams(location.search).has('perf')
+  ? (() => {
+      const acc = new Map<string, [number, number]>();
+      let frames = 0;
+      const tick = () => {
+        frames++;
+        requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+      setInterval(() => {
+        const parts = [...acc].map(([k, [sum, n]]) => `${k} ${(sum / n).toFixed(1)}`);
+        console.log(`[perf] кадров/с ${(frames / 3).toFixed(0)}; ${parts.join('; ')}`);
+        (globalThis as Record<string, unknown>).__perf = { fps: frames / 3, ...Object.fromEntries([...acc].map(([k, [s, n]]) => [k, s / n])) };
+        frames = 0;
+        acc.clear();
+      }, 3000);
+      return {
+        add(key: string, ms: number) {
+          const a = acc.get(key) ?? [0, 0];
+          a[0] += ms;
+          a[1]++;
+          acc.set(key, a);
+        },
+      };
+    })()
+  : null;
+
 const MODELS = `${import.meta.env.BASE_URL}models/`;
 const STORAGE_KEY = 'mannequin:figure:v1';
 const PHOTO_KEY = 'mannequin:photo:v1';
@@ -170,7 +201,9 @@ function schedule(): void {
 function refit(): void {
   if (!current) return;
   const target = state.figures[state.gender];
+  const t0 = performance.now();
   const fit = current.model.fit(target, current.shape);
+  perf?.add('подгонка фигуры, мс', performance.now() - t0);
   current.shape = fit.shape;
   stage.update(fit);
   showFact(target, fit);
@@ -423,7 +456,12 @@ function rebuildGarment(): void {
   );
 }
 stage.onRebuild = rebuildGarment;
-stage.onFrame = (dt) => garment?.frame(dt, stage.surroundings());
+stage.onFrame = (dt) => {
+  if (!garment) return;
+  const t0 = performance.now();
+  garment.frame(dt, stage.surroundings());
+  perf?.add('ткань, мс/кадр', performance.now() - t0);
+};
 stage.onPose = () => garment?.drapeForPose(stage.surroundings());
 
 function renderVerdict(): void {

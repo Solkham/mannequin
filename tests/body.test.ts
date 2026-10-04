@@ -15,12 +15,20 @@ function loadGlb(file: string): Omit<BodyData, 'rings' | 'density'> {
   const read = (i: number) => {
     const acc = gltf.accessors[i];
     const view = gltf.bufferViews[acc.bufferView];
-    const n = acc.count * (acc.type === 'VEC3' ? 3 : 1);
+    const k = acc.type === 'VEC3' ? 3 : acc.type === 'VEC4' ? 4 : 1;
     const start = binStart + view.byteOffset;
     const bytes = buf.buffer.slice(buf.byteOffset + start, buf.byteOffset + start + view.byteLength);
-    if (acc.componentType === 5126) return new Float32Array(bytes, 0, n);
-    if (acc.componentType === 5123) return new Uint16Array(bytes, 0, n);
-    return new Uint32Array(bytes, 0, n);
+    const T = ({ 5126: Float32Array, 5123: Uint16Array, 5125: Uint32Array, 5122: Int16Array, 5120: Int8Array, 5121: Uint8Array } as const)[
+      acc.componentType as 5126
+    ];
+    const raw = new T(bytes);
+    const per = view.byteStride ? view.byteStride / T.BYTES_PER_ELEMENT : k;
+    if (per === k && !acc.normalized) return raw;
+    // Квантованные нормализованные значения (KHR_mesh_quantization) с шагом строки.
+    const scale = acc.normalized ? ({ 5122: 32767, 5120: 127, 5121: 255 } as Record<number, number>)[acc.componentType] : 1;
+    const out = new Float32Array(acc.count * k);
+    for (let v = 0; v < acc.count; v++) for (let c = 0; c < k; c++) out[v * k + c] = raw[v * per + c] / scale;
+    return out;
   };
   const mesh = gltf.meshes[0];
   const prim = mesh.primitives[0];

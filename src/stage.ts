@@ -31,6 +31,18 @@ export interface LoadedBody {
   data: Omit<BodyData, 'rings' | 'density'>;
 }
 
+/** Атрибут (в т.ч. нормализованный int16 с шагом) → Float32Array x y z подряд, в единицах сцены. */
+function toFloat3(a: THREE.BufferAttribute | THREE.InterleavedBufferAttribute): Float32Array {
+  if (a.array instanceof Float32Array && !('isInterleavedBufferAttribute' in a)) return a.array;
+  const out = new Float32Array(a.count * 3);
+  for (let i = 0; i < a.count; i++) {
+    out[i * 3] = a.getX(i);
+    out[i * 3 + 1] = a.getY(i);
+    out[i * 3 + 2] = a.getZ(i);
+  }
+  return out;
+}
+
 export async function loadBody(url: string): Promise<LoadedBody> {
   const gltf = await new GLTFLoader().loadAsync(url);
   let mesh: THREE.SkinnedMesh | undefined;
@@ -53,7 +65,8 @@ export async function loadBody(url: string): Promise<LoadedBody> {
     mesh,
     data: {
       base: geo.attributes.position.array as Float32Array,
-      deltas: (geo.morphAttributes.position ?? []).map((a) => a.array as Float32Array),
+      // Морфы в файле квантованы (int16, KHR_mesh_quantization): для расчётов — в метры.
+      deltas: (geo.morphAttributes.position ?? []).map(toFloat3),
       names,
       index: geo.index!.array,
     },

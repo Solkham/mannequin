@@ -170,10 +170,19 @@ export class Cloth {
     for (let s = 0; s < steps; s++) this.step(1 / 60, env);
   }
 
-  /** Пояс пришит: верхнее кольцо идёт за телом (позы, ходьба). */
-  setPins(top: Float32Array): void {
+  /** Пояс пришит: верхнее кольцо идёт за телом (позы, ходьба). Возвращает, на сколько он сдвинулся, м. */
+  setPins(top: Float32Array): number {
+    let moved = 0;
+    for (let i = 0; i < top.length; i++) moved = Math.max(moved, Math.abs(top[i] - this.pins[i]));
     this.pins.set(top);
+    return moved;
   }
+
+  /** Сколько проходов по ниткам за шаг: меньше — быстрее, но ткань тянется сильнее. */
+  iterations = ITER;
+
+  /** Самый большой сдвиг частицы за последний шаг, м: по нему видно, что ткань осела. */
+  lastMotion = Infinity;
 
   step(dt: number, env: ClothEnv): void {
     const p = this.pos, q = this.prev;
@@ -195,7 +204,8 @@ export class Cloth {
 
     const { cA, cB, cLen, cStretch, cCompress } = this;
     const pinned = this.cols;
-    for (let it = 0; it < ITER; it++) {
+    const iters = this.iterations;
+    for (let it = 0; it < iters; it++) {
       for (let c = 0; c < cA.length; c++) {
         const ia = cA[c], ib = cB[c];
         const a = ia * 3, b = ib * 3;
@@ -210,11 +220,23 @@ export class Cloth {
         p[a] += dx * s * wa; p[a + 1] += dy * s * wa; p[a + 2] += dz * s * wa;
         p[b] -= dx * s * wb; p[b + 1] -= dy * s * wb; p[b + 2] -= dz * s * wb;
       }
-      if (it % 3 === 2 || it === ITER - 1) {
+      if (it % 3 === 2 || it === iters - 1) {
         this.limitReach();
         this.collide(env);
       }
     }
+    this.measureMotion();
+  }
+
+  /** Посчитать, насколько ткань сдвинулась за шаг (вызывается в конце step). */
+  private measureMotion(): void {
+    const p = this.pos, q = this.prev;
+    let m = 0;
+    for (let i = this.cols * 3; i < p.length; i++) {
+      const d = Math.abs(p[i] - q[i]);
+      if (d > m) m = d;
+    }
+    this.lastMotion = m;
   }
 
   /** Ткань не растягивается: частица не дальше от пояса, чем длина ткани до неё. */

@@ -243,12 +243,43 @@ def write_glb(path: Path, base: np.ndarray, normals: np.ndarray, faces: np.ndarr
         accessors.append(acc)
         return len(accessors) - 1
 
+    def add_quant(arr: np.ndarray, comp: int, typ: str, minmax: bool = False) -> int:
+        """Нормализованные целые (KHR_mesh_quantization): value = q / 32767 (int16) или q / 127 (int8).
+        Строка вершины добита до 4 байт: glTF требует шаг атрибута кратный 4."""
+        n, k = arr.shape
+        if comp == 5122:  # int16
+            q = np.clip(np.round(arr * 32767), -32767, 32767).astype(np.int16)
+        elif comp == 5120:  # int8
+            q = np.clip(np.round(arr * 127), -127, 127).astype(np.int8)
+        else:  # uint8
+            q = np.clip(np.round(arr * 255), 0, 255).astype(np.uint8)
+        size = q.itemsize * k
+        stride = size + (-size % 4)
+        padded = np.zeros((n, stride // q.itemsize), dtype=q.dtype)
+        padded[:, :k] = q
+        data = padded.tobytes()
+        offset = sum(len(b) for b in blobs)
+        blobs.append(data + b"\0" * (-len(data) % 4))
+        view = {"buffer": 0, "byteOffset": offset, "byteLength": len(data), "target": 34962}
+        if stride != size:
+            view["byteStride"] = stride
+        views.append(view)
+        acc = {"bufferView": len(views) - 1, "componentType": comp, "normalized": True,
+               "count": int(n), "type": typ}
+        if minmax:
+            scale = {5122: 32767, 5120: 127, 5121: 255}[comp]
+            acc["min"] = (q.min(axis=0) / scale).tolist()
+            acc["max"] = (q.max(axis=0) / scale).tolist()
+        accessors.append(acc)
+        return len(accessors) - 1
+
     FLOAT, U8, U16, U32 = 5126, 5121, 5123, 5125
+    I8, I16 = 5120, 5122
     pos = add(base.astype(np.float32), FLOAT, "VEC3", 34962, minmax=True)
     nor = add(normals.astype(np.float32), FLOAT, "VEC3", 34962)
     joints, weights, bone_names, parents, heads = skin
     jnt = add(joints, U8, "VEC4", 34962)
-    wgt = add(weights, FLOAT, "VEC4", 34962)
+    wgt = add_quant(weights, U8, "VEC4")
     # Кости без поворота, только сдвиг от родителя: локальные оси = мировые.
     ibm = np.tile(np.eye(4, dtype=np.float32), (len(heads), 1, 1))
     ibm[:, 3, :3] = -heads  # столбцовый порядок glTF: перенос в последнем столбце
@@ -262,14 +293,17 @@ def write_glb(path: Path, base: np.ndarray, normals: np.ndarray, faces: np.ndarr
     morph = []
     for _, dp, dn in targets:
         morph.append({
-            "POSITION": add(dp.astype(np.float32), FLOAT, "VEC3", 34962, minmax=True),
-            "NORMAL": add(dn.astype(np.float32), FLOAT, "VEC3", 34962),
+            # Сдвиги морфов меньше метра: int16 даёт точность 0.03 мм. Нормали — int8 (1/127).
+            "POSITION": add_quant(dp.astype(np.float32), I16, "VEC3", minmax=True),
+            "NORMAL": add_quant(np.clip(dn, -1, 1).astype(np.float32), I8, "VEC3"),
         })
 
     names = [t[0] for t in targets]
     gltf = {
         "asset": {"version": "2.0", "generator": "mannequin/scripts/export_anny.py",
                   "copyright": "Anny body model (c) NAVER Corp., Apache-2.0; based on MakeHuman (CC0)"},
+        "extensionsUsed": ["KHR_mesh_quantization"],
+        "extensionsRequired": ["KHR_mesh_quantization"],
         "scene": 0,
         "scenes": [{"nodes": [0] + [1 + i for i, p in enumerate(parents) if p < 0]}],
         "nodes": [{"name": path.stem, "mesh": 0, "skin": 0}] + [
