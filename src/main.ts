@@ -3,7 +3,7 @@ import { Stage, loadBody, type LoadedBody, type Pose, type Tone, type View, type
 import { Rig, type BonesMeta } from './rig.ts';
 import { ZONE_NAME, chipLabel, evaluate, sizeName, zoneLabel, type Category, type Item, type SizeFit, type Status } from './sizing.ts';
 import { Garment, type Look } from './garment.ts';
-import { badgePrint } from './fabrics.ts';
+import { badgePrint, placketPrint } from './fabrics.ts';
 import { loadPhoto, type PhotoPrint } from './photo.ts';
 import { TONE_COLOR } from './stage.ts';
 import itemsJson from './data/items.json';
@@ -15,8 +15,12 @@ const STORAGE_KEY = 'mannequin:figure:v1';
 const PHOTO_KEY = 'mannequin:photo:v1';
 
 const CATEGORY_NAME: Record<Category, string> = {
-  top: 'Футболка, худи, свитер',
+  tee: 'Футболка, топ',
+  shirt: 'Рубашка, блузка',
+  top: 'Худи, свитшот, свитер',
   bottom: 'Брюки, джинсы',
+  shorts: 'Шорты',
+  skirt: 'Юбка',
   dress: 'Платье',
   outer: 'Куртка, пуховик',
 };
@@ -331,7 +335,10 @@ function lookFor(item: Item): Look {
   return {
     color,
     fabric: item.fabric,
-    print: item.print === 'badge' ? { image: badgePrint(light ? '#2b2b2d' : '#f4efe6'), rect: 'chest' } : null,
+    print:
+      item.print === 'badge' ? { image: badgePrint(light ? '#2b2b2d' : '#f4efe6'), rect: 'chest' }
+      : item.print === 'placket' ? { image: placketPrint(color), rect: 'placket' }
+      : null,
   };
 }
 

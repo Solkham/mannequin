@@ -33,9 +33,9 @@ export interface Chart {
 }
 
 /** Тип вещи: от него зависят форма оболочки на манекене и свобода облегания. */
-export type Category = 'top' | 'bottom' | 'dress' | 'outer';
+export type Category = 'top' | 'tee' | 'shirt' | 'bottom' | 'shorts' | 'skirt' | 'dress' | 'outer';
 /** Фактура ткани на манекене (src/fabrics.ts). */
-export type Fabric = 'plain' | 'knit' | 'denim' | 'quilt' | 'floral';
+export type Fabric = 'plain' | 'knit' | 'denim' | 'quilt' | 'floral' | 'stripes' | 'plaid' | 'oxford';
 
 export interface ItemColor {
   name: string;
@@ -51,8 +51,8 @@ export interface Item {
   fabric: Fabric;
   /** Цвета на выбор; первый — по умолчанию. */
   colors: ItemColor[];
-  /** Нашивка-принт на груди. */
-  print?: 'badge';
+  /** Принт: нашивка на груди (badge) или планка с пуговицами (placket). */
+  print?: 'badge' | 'placket';
   /** На сколько см ткань без вреда тянется сверх сетки: деним с эластаном 2, трикотаж 3–4. */
   stretch: number;
   url?: string;

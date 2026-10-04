@@ -47,6 +47,10 @@ const cases: Case[] = [
   { label: 'сетка по замерам изделия', item: 'garment-chart', gender: 'female', body: fig(104, 88, 112), best: 'M', tone: 'ok' },
   { label: 'мужчина, пуховик', item: 'puffer', gender: 'male', body: fig(100, 88, 104), best: '50', tone: 'ok' },
   { label: 'мужчина, платье', item: 'dress', gender: 'male', body: fig(100, 88, 104), none: true },
+  { label: 'мужчина, юбка', item: 'skirt', gender: 'male', body: fig(100, 88, 104), none: true },
+  { label: 'юбка по талии и бёдрам', item: 'skirt', gender: 'female', body: fig(96, 78, 104), best: '48', tone: 'ok' },
+  { label: 'шорты, мужчина', item: 'shorts', gender: 'male', body: fig(100, 88, 104), best: '50', tone: 'ok' },
+  { label: 'рубашка, мужчина', item: 'shirt', gender: 'male', body: fig(104, 92, 108), best: '52', tone: 'ok' },
 ];
 
 let failed = 0;
