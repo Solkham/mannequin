@@ -57,6 +57,21 @@ LOCAL = {
 DENSITY = 1040.0
 
 ARM_BONE_KEYS = ("arm", "shoulder", "wrist", "finger", "metacarpal", "hand")
+
+# Части тела для одежды (src/garment.ts): номер части = индекс в этом списке.
+# Вершина относится к части, чьи кости дают ей наибольший суммарный вес.
+PARTS = [
+    ("torso", ("root", "pelvis", "spine", "clavicle")),
+    ("neck", ("neck",)),
+    ("head", ("head", "eye", "jaw", "tongue")),
+    ("upperarm1", ("shoulder", "upperarm01")),
+    ("upperarm2", ("upperarm02",)),
+    ("lowerarm", ("lowerarm",)),
+    ("hand", ("wrist", "finger", "metacarpal")),
+    ("upperleg", ("upperleg",)),
+    ("lowerleg", ("lowerleg",)),
+    ("foot", ("foot", "toe")),
+]
 LEG_BONE_KEYS = ("upperleg", "lowerleg", "foot", "toe")
 
 
@@ -141,6 +156,12 @@ def bone_mask(model, keys: tuple[str, ...]) -> np.ndarray:
     idx = model.vertex_bone_indices.cpu().numpy()
     hit = np.array([any(k in labels[i].lower() for k in keys) for i in range(len(labels))])
     return (w * hit[idx]).sum(axis=1)
+
+
+def body_parts(model) -> str:
+    """Строка из цифр: часть тела каждой вершины (см. PARTS)."""
+    scores = np.stack([bone_mask(model, keys) for _, keys in PARTS], axis=1)
+    return "".join(str(i) for i in scores.argmax(axis=1))
 
 
 def ring_at(v: np.ndarray, torso: np.ndarray, level: float, band: float = 0.008) -> list[int]:
@@ -295,6 +316,7 @@ def export_gender(model, name: str, g: float, faces: np.ndarray) -> dict:
 
     return {
         "file": path.name,
+        "parts": body_parts(model),
         "targets": [t[0] for t in targets],
         "rings": rings,
         "base": {k: round(v, 5) for k, v in m0.items()},
@@ -314,6 +336,7 @@ def main() -> None:
         "source": f"Anny {anny.__version__} (NAVER, Apache-2.0), MakeHuman base mesh",
         "units": "metres, Y up, face towards +Z, feet on y=0",
         "density": DENSITY,
+        "partNames": [name for name, _ in PARTS],
         "genders": {name: export_gender(model, name, g, faces) for name, g in GENDERS.items()},
     }
     meta_path = OUT_DIR / "anny-meta.json"
