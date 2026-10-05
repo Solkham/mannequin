@@ -45,7 +45,7 @@ const FINISH: Record<Fabric, Omit<Finish, 'relief'>> = {
   knit: { tile: 0.012, depth: 0.0006, roughness: 0.9, sheen: 0.45, clearcoat: 0 },
   stripes: { tile: 0.008, depth: 0.0004, roughness: 0.88, sheen: 0.35, clearcoat: 0 },
   denim: { tile: 0.01, depth: 0.0005, roughness: 0.96, sheen: 0, clearcoat: 0 },
-  quilt: { tile: 0.13, depth: 0.006, roughness: 0.42, sheen: 0, clearcoat: 0.55 },
+  quilt: { tile: 0.13, depth: 0.004, roughness: 0.55, sheen: 0, clearcoat: 0.3 },
   floral: { tile: 0.006, depth: 0.00015, roughness: 0.62, sheen: 0.5, clearcoat: 0 },
   plaid: { tile: 0.01, depth: 0.0004, roughness: 0.9, sheen: 0.25, clearcoat: 0 },
   oxford: { tile: 0.008, depth: 0.0004, roughness: 0.82, sheen: 0.1, clearcoat: 0 },
