@@ -29,6 +29,9 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+        env:
+          # Адрес прокси «Фото в этой вещи» (worker/README.md); пусто — кнопка просит подключить сервис.
+          VITE_GEN_URL: ${{ vars.GEN_URL }}
       - if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v4
         with:

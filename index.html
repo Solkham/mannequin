@@ -31,6 +31,12 @@
   </section>
 
   <div class="stack">
+    <section class="card shoot">
+      <button class="primary" id="shoot" type="button">Фото в этой вещи</button>
+      <p class="hint">Реалистичное фото человека с вашей фигурой в этой вещи — по снимку манекена. Ваши фото не нужны.</p>
+      <div id="shoot-out" aria-live="polite"></div>
+    </section>
+
     <section class="card">
       <h2>Моя фигура</h2>
       <div class="seg" role="group" aria-label="Пол">
@@ -38,7 +44,7 @@
         <button data-gender="male" aria-pressed="false">Мужская</button>
       </div>
       <div id="sliders"></div>
-      <div class="colors" id="skin" role="group" aria-label="Тон кожи"></div>
+      <div class="colors" id="skin" role="group" aria-label="Оттенок манекена"></div>
       <p class="fact" id="fact" aria-live="polite"></p>
       <p class="priv">Данные остаются на вашем устройстве и никуда не отправляются.</p>
     </section>

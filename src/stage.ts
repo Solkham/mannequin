@@ -17,15 +17,25 @@ export type StagePose = Pose | 'show';
 const SHOW = { distance: 3.2, speed: 1.05, pause: 0.6, turnHalf: 2.2, holdBack: 1.2, holdFront: 1.0 };
 export type { Pose };
 
-/** Тона кожи на выбор (от светлого к тёмному). */
+/**
+ * Оттенки дерева манекена (решение владельца: деревянный манекен без лица) —
+ * под разные оттенки кожи, от светлого к тёмному.
+ */
 export const SKIN_TONES = [
-  { name: 'светлый', hex: '#f0d2bf' },
-  { name: 'светло-бежевый', hex: '#e2b597' },
-  { name: 'средний', hex: '#c98f6c' },
-  { name: 'смуглый', hex: '#9c6646' },
-  { name: 'тёмный', hex: '#6a412f' },
+  { name: 'берёза', hex: '#e6cda4' },
+  { name: 'светлое дерево', hex: '#c9a178' },
+  { name: 'дуб', hex: '#a77b50' },
+  { name: 'орех', hex: '#7a5236' },
+  { name: 'венге', hex: '#4a3226' },
 ];
-const EYE = { sclera: 0xf2efea, iris: 0x5a3d24, pupil: 0x0b0806 };
+/** Швы сборки манекена: на шее, плечах и запястьях, как у витринных манекенов. */
+const SEAMS = [
+  { joint: 'neck01', to: 'head', radius: 0.085 },
+  { joint: 'upperarm01.L', to: 'lowerarm01.L', radius: 0.075 },
+  { joint: 'upperarm01.R', to: 'lowerarm01.R', radius: 0.075 },
+  { joint: 'wrist.L', to: 'lowerarm01.L', radius: 0.05 },
+  { joint: 'wrist.R', to: 'lowerarm01.R', radius: 0.05 },
+] as const;
 const RING_COLOR = 0x2f4a3a;
 // Цвета зон те же, что в интерфейсе (--ok, --warn, --bad).
 export const TONE_COLOR = { ok: 0x2e7d4f, warn: 0xc98a1b, bad: 0xb3372c } as const;
@@ -53,42 +63,124 @@ function toFloat3(a: THREE.BufferAttribute | THREE.InterleavedBufferAttribute): 
 }
 
 /**
- * Глаза: вершины глазных яблок (вес кости глаза > 0.5) делим на белок, радужку и зрачок
- * по направлению от центра глаза: вперёд смотрит радужка, в самом центре — зрачок.
- * 0 — кожа, 1 — белок, 2 — радужка, 3 — зрачок.
+ * Голова без лица: вершины головы (и глаз) плавно переносим на гладкое «яйцо», как у
+ * витринного манекена: нос, губы, глазницы и уши исчезают. Яйцо подбирается по черепу:
+ * высота — от подбородка до макушки, ширина и глубина — по своду черепа (без ушей и носа).
+ * У шеи переход плавный по весу кости головы. Нормали пересчитываются.
  */
-function eyeMask(mesh: THREE.SkinnedMesh): Uint8Array {
+function makeFaceless(mesh: THREE.SkinnedMesh): void {
   const geo = mesh.geometry;
-  const pos = geo.getAttribute('position');
+  const pos = geo.getAttribute('position') as THREE.BufferAttribute;
+  const p = pos.array as Float32Array;
   const si = geo.getAttribute('skinIndex');
   const sw = geo.getAttribute('skinWeight');
-  const bones = mesh.skeleton.bones.map((b) => b.name);
-  // Three.js при загрузке убирает точки из имён узлов: eye.L → eyeL.
-  const eyes = ['eye.L', 'eye.R'].map((n) => bones.indexOf(THREE.PropertyBinding.sanitizeNodeName(n))).filter((i) => i >= 0);
+  const names = mesh.skeleton.bones.map((b) => b.name);
+  const headBones = ['head', 'eye.L', 'eye.R'].map((n) => names.indexOf(THREE.PropertyBinding.sanitizeNodeName(n)));
   const n = pos.count;
-  const owner = new Int8Array(n).fill(-1);
-  const sum = eyes.map(() => new THREE.Vector3());
-  const cnt = eyes.map(() => 0);
+  const w = new Float32Array(n);
   for (let v = 0; v < n; v++) {
-    for (let k = 0; k < 4; k++) {
-      const e = eyes.indexOf(si.getComponent(v, k));
-      if (e >= 0 && sw.getComponent(v, k) > 0.5) {
-        owner[v] = e;
-        sum[e].add(new THREE.Vector3(pos.getX(v), pos.getY(v), pos.getZ(v)));
-        cnt[e]++;
-      }
+    for (let k = 0; k < 4; k++) if (headBones.includes(si.getComponent(v, k))) w[v] += sw.getComponent(v, k);
+  }
+  // Свод черепа: вершины, почти целиком на кости головы.
+  let top = -Infinity, chin = Infinity, cx = 0, cnt = 0;
+  for (let v = 0; v < n; v++) {
+    if (w[v] < 0.95) continue;
+    top = Math.max(top, p[v * 3 + 1]);
+    chin = Math.min(chin, p[v * 3 + 1]);
+    cx += p[v * 3];
+    cnt++;
+  }
+  cx /= cnt || 1;
+  const cy = (top + chin) / 2;
+  const ry = (top - chin) / 2;
+  // Ширина и глубина — выше ушей и бровей (там нет ни ушей, ни носа).
+  const xs: number[] = [];
+  let zf = -Infinity, zb = Infinity;
+  for (let v = 0; v < n; v++) {
+    if (w[v] < 0.95) continue;
+    const y = p[v * 3 + 1];
+    if (y > cy + 0.35 * ry) {
+      xs.push(Math.abs(p[v * 3] - cx));
+      zf = Math.max(zf, p[v * 3 + 2]);
+      zb = Math.min(zb, p[v * 3 + 2]);
     }
   }
-  const centers = sum.map((s, e) => s.divideScalar(cnt[e] || 1));
-  const out = new Uint8Array(n);
+  xs.sort((a, b) => a - b);
+  const rx = (xs[Math.floor(xs.length * 0.98)] ?? 0.075) * 1.04;
+  const cz = (zf + zb) / 2 + 0.006;
+  const rz = (zf - zb) / 2 + 0.004;
   const d = new THREE.Vector3();
   for (let v = 0; v < n; v++) {
-    const e = owner[v];
-    if (e < 0) continue;
-    d.set(pos.getX(v), pos.getY(v), pos.getZ(v)).sub(centers[e]).normalize();
-    out[v] = d.z > 0.965 ? 3 : d.z > 0.86 ? 2 : 1;
+    const k = THREE.MathUtils.smoothstep(w[v], 0.35, 0.9);
+    if (k <= 0) continue;
+    d.set((p[v * 3] - cx) / rx, (p[v * 3 + 1] - cy) / ry, (p[v * 3 + 2] - cz) / rz);
+    if (d.lengthSq() < 1e-8) d.set(0, 0, 1);
+    d.normalize();
+    // Яйцо: к подбородку чуть уже и мельче.
+    const taper = 1 - 0.16 * Math.max(0, -d.y) ** 1.5;
+    const tx = cx + d.x * rx * taper, ty = cy + d.y * ry, tz = cz + d.z * rz * taper;
+    p[v * 3] += (tx - p[v * 3]) * k;
+    p[v * 3 + 1] += (ty - p[v * 3 + 1]) * k;
+    p[v * 3 + 2] += (tz - p[v * 3 + 2]) * k;
   }
-  return out;
+  pos.needsUpdate = true;
+  geo.computeVertexNormals();
+}
+
+/** Дерево и швы манекена в шейдере материала тела. */
+const woodUniforms = {
+  uSeamPos: { value: SEAMS.map(() => new THREE.Vector3()) },
+  uSeamAxis: { value: SEAMS.map(() => new THREE.Vector3(0, 1, 0)) },
+  uSeamRadius: { value: SEAMS.map((s) => s.radius) },
+};
+
+function woodMaterial(): THREE.MeshPhysicalMaterial {
+  // Лакированное дерево: под лаком тёплый матовый тон, сверху ровный блик лака.
+  const m = new THREE.MeshPhysicalMaterial({
+    color: 0xffffff, vertexColors: true, roughness: 0.5, metalness: 0,
+    clearcoat: 0.6, clearcoatRoughness: 0.25, specularIntensity: 0.45,
+  });
+  m.onBeforeCompile = (shader) => {
+    Object.assign(shader.uniforms, woodUniforms);
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', `#include <common>
+varying vec3 vWood;`)
+      .replace('#include <morphtarget_vertex>', `#include <morphtarget_vertex>
+vWood = transformed;`);
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>
+varying vec3 vWood;
+uniform vec3 uSeamPos[${SEAMS.length}];
+uniform vec3 uSeamAxis[${SEAMS.length}];
+uniform float uSeamRadius[${SEAMS.length}];
+float wHash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+float wNoise(vec3 p) {
+  vec3 i = floor(p), f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(mix(wHash(i), wHash(i + vec3(1,0,0)), f.x), mix(wHash(i + vec3(0,1,0)), wHash(i + vec3(1,1,0)), f.x), f.y),
+             mix(mix(wHash(i + vec3(0,0,1)), wHash(i + vec3(1,0,1)), f.x), mix(wHash(i + vec3(0,1,1)), wHash(i + vec3(1,1,1)), f.x), f.y), f.z);
+}`)
+      .replace('#include <color_fragment>', `#include <color_fragment>
+{
+  // Волокна вдоль тела: тонкие, вытянуты по высоте. Колец нет — на голове они рисуют лицо.
+  // Под лаком дерево почти ровное, рисунок читается только вблизи.
+  vec3 q = vWood * vec3(140.0, 9.0, 140.0);
+  float fiber = wNoise(q) * 0.65 + wNoise(q * 2.7) * 0.35;
+  float flame = wNoise(vWood * vec3(22.0, 3.0, 22.0));
+  diffuseColor.rgb *= mix(0.95, 1.025, fiber) * mix(0.96, 1.02, flame);
+  // Швы сборки: тонкая тёмная линия там, где плоскость сустава пересекает деталь.
+  float seam = 0.0;
+  for (int i = 0; i < ${SEAMS.length}; i++) {
+    vec3 r = vWood - uSeamPos[i];
+    float along = dot(r, uSeamAxis[i]);
+    float radial = length(r - uSeamAxis[i] * along);
+    seam = max(seam, (1.0 - smoothstep(0.0012, 0.0028, abs(along))) * (1.0 - step(uSeamRadius[i], radial)));
+  }
+  diffuseColor.rgb *= 1.0 - 0.55 * seam;
+}`);
+  };
+  m.customProgramCacheKey = () => 'wood-mannequin-v3';
+  return m;
 }
 
 export async function loadBody(url: string): Promise<LoadedBody> {
@@ -101,14 +193,11 @@ export async function loadBody(url: string): Promise<LoadedBody> {
   const geo = mesh.geometry;
   const dict = mesh.morphTargetDictionary ?? {};
   const names = Object.keys(dict).sort((a, b) => dict[a] - dict[b]);
-  // Цвет кожи, глаза и подсветка зон живут в цвете вершин, материал белый.
-  // Кожа: физическая модель с бархатистым отблеском (sheen) — как у живой кожи, не пластик.
-  mesh.material = new THREE.MeshPhysicalMaterial({
-    color: 0xffffff, vertexColors: true, roughness: 0.52, metalness: 0,
-    sheen: 0.55, sheenRoughness: 0.45, sheenColor: new THREE.Color(0xffb8a8), specularIntensity: 0.4,
-  });
+  // Деревянный манекен без лица: оттенок дерева и подсветка зон — в цвете вершин,
+  // волокна, кольца и швы — в шейдере.
+  makeFaceless(mesh);
+  mesh.material = woodMaterial();
   geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count * 3), 3));
-  mesh.userData.eyes = eyeMask(mesh);
   mesh.castShadow = true;
   mesh.removeFromParent();
   return {
@@ -281,10 +370,11 @@ export class Stage {
     this.paint();
   }
 
-  /** Одета ли вещь: тогда линии замера не рисуем поверх ткани. */
+  /** Одета ли вещь: тогда линии замера не рисуем поверх ткани, а зоны красит ткань. */
   setDressed(on: boolean): void {
     this.dressed = on;
     this.syncRingVisibility();
+    this.paint();
   }
 
   /** Линии замера видны там, где нет вердикта, только раздетым и только когда манекен стоит. */
@@ -305,19 +395,13 @@ export class Stage {
     const attr = body.geometry.getAttribute('color') as THREE.BufferAttribute;
     const c = attr.array as Float32Array;
     const skin = new THREE.Color(this.skinTone);
-    const eyes = body.userData.eyes as Uint8Array | undefined;
-    const eyeCol = [null, new THREE.Color(EYE.sclera), new THREE.Color(EYE.iris), new THREE.Color(EYE.pupil)];
+    // На одетом манекене зоны подсвечивает ткань: открытое дерево (ноги под короткой
+    // футболкой) не красим.
     const tones = RINGS.map((r) => {
-      const z = this.zones[r];
+      const z = this.dressed ? undefined : this.zones[r];
       return z ? { w: this.weights![r], color: new THREE.Color(TONE_COLOR[z.tone]) } : null;
     });
     for (let v = 0; v < attr.count; v++) {
-      const e = eyes?.[v] ?? 0;
-      if (e) {
-        const ec = eyeCol[e]!;
-        c[v * 3] = ec.r; c[v * 3 + 1] = ec.g; c[v * 3 + 2] = ec.b;
-        continue;
-      }
       let r = skin.r, g = skin.g, b = skin.b;
       for (const t of tones) {
         const k = t ? t.w[v] * TINT : 0;
@@ -339,6 +423,10 @@ export class Stage {
     if (!rig) return;
     this.fit = fit;
     rig.setShape(fit.influences, this.names);
+    SEAMS.forEach((seam, i) => {
+      const at = rig.head(seam.joint, woodUniforms.uSeamPos.value[i]);
+      rig.head(seam.to, woodUniforms.uSeamAxis.value[i]).sub(at).normalize();
+    });
     for (const m of rig.meshes) {
       const inf = m.morphTargetInfluences;
       if (inf) for (let i = 0; i < inf.length; i++) inf[i] = fit.influences[i];
@@ -378,6 +466,25 @@ export class Stage {
     this.syncRingVisibility();
     this.place(0);
     this.onPose?.();
+  }
+
+  get currentPose(): StagePose {
+    return this.pose;
+  }
+
+  /** Кадр сцены как картинка (JPEG data URL) — для «Фото в этой вещи». */
+  snapshot(): string {
+    // Холст прозрачный: подкладываем светлый фон студии, иначе в JPEG он станет чёрным.
+    this.renderer.render(this.scene, this.camera);
+    const src = this.renderer.domElement;
+    const out = document.createElement('canvas');
+    out.width = src.width;
+    out.height = src.height;
+    const g = out.getContext('2d')!;
+    g.fillStyle = '#efe9df';
+    g.fillRect(0, 0, out.width, out.height);
+    g.drawImage(src, 0, 0);
+    return out.toDataURL('image/jpeg', 0.9);
   }
 
   setView(view: View): void {
