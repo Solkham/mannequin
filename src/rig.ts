@@ -124,7 +124,7 @@ export class Rig {
   // ------------------------------------------------------------ позы
 
   /** Позы: все кости в покой, затем прицелы сегментов сверху вниз по дереву. */
-  private applyAims(aims: Aim[]): void {
+  private applyAims(aims: Aim[], local = new Map<number, THREE.Quaternion>()): void {
     const { parents } = this.meta;
     const byBone = new Map(aims.map((a) => [this.boneIndex(a.bone), a]));
     const world: THREE.Quaternion[] = [];
@@ -135,8 +135,11 @@ export class Rig {
       const pw = parents[i] >= 0 ? world[parents[i]] : new THREE.Quaternion();
       const aim = byBone.get(i);
       if (!aim) {
-        b.quaternion.identity();
-        world[i] = pw.clone();
+        // Без прицела — свой поворот относительно родителя (таз, позвоночник) или покой.
+        const q = local.get(i);
+        if (q) b.quaternion.copy(q);
+        else b.quaternion.identity();
+        world[i] = pw.clone().multiply(b.quaternion);
         return;
       }
       this.head(aim.to, rest).sub(this.head(aim.bone, cur)).normalize();
@@ -185,6 +188,7 @@ export class Rig {
   pose(pose: Pose, t = 0): number {
     this.last = { pose, t };
     const aims: Aim[] = [];
+    const local = new Map<number, THREE.Quaternion>();
     const flatFoot = (side: Side) => this.restDir(`foot.${side}`, `toe3-1.${side}`);
 
     if (pose === 'stand' || pose === 'lie') {
@@ -193,30 +197,67 @@ export class Rig {
         aims.push(...this.arms(side, this.down(side, 0.03, 0.2), this.down(side, 0.12, 0.2)));
       }
     } else if (pose === 'walk') {
-      const phase = (t / 1.1) * Math.PI * 2;
-      for (const side of ['L', 'R'] as Side[]) {
-        const p = side === 'L' ? phase : phase + Math.PI;
-        const thigh = 0.38 * Math.sin(p);
-        // колено сгибается, когда нога идёт вперёд по воздуху
-        const knee = 0.12 + 0.55 * Math.max(0, Math.sin(p + 1.1)) ** 2;
-        const shin = thigh - knee;
-        aims.push(...this.leg(side, this.down(side, thigh, 0.05), this.down(side, shin, 0.03), flatFoot(side)));
-        const arm = -0.3 * Math.sin(p);
-        aims.push(...this.arms(side, this.down(side, arm, 0.2), this.down(side, arm + 0.25, 0.18)));
-      }
+      this.gait(t, aims, local);
     } else if (pose === 'sit') {
       for (const side of ['L', 'R'] as Side[]) {
         aims.push(...this.leg(side, this.down(side, 1.45, 0.12), this.down(side, 0.08, 0.06), flatFoot(side)));
         aims.push(...this.arms(side, this.down(side, 0.35, 0.16), this.down(side, 1.25, 0.05)));
       }
     }
-    this.applyAims(aims);
+    this.applyAims(aims, local);
     this.group.updateMatrixWorld(true);
 
     if (pose === 'lie') return 0;
     // Стопа, что ниже, — на полу, как в покое.
     const restAnkle = Math.min(this.head('foot.L').y, this.head('foot.R').y);
     return restAnkle - Math.min(this.boneY('foot.L'), this.boneY('foot.R'));
+  }
+
+  /**
+   * Ходьба по нормальным кривым шага (биомеханика, Winter): углы бедра, колена и голеностопа
+   * по фазе цикла (0 — удар пяткой), поворот и наклон таза, встречный поворот грудной клетки,
+   * мах рук в противофазе ногам со сгибом локтя. Цикл 1.1 с — спокойный шаг.
+   */
+  private gait(t: number, aims: Aim[], local: Map<number, THREE.Quaternion>): void {
+    const deg = Math.PI / 180;
+    const T = 1.1;
+    const g = (x: number, mu: number, sd: number) => {
+      // Гаусс на окружности фаз: фаза 0.98 рядом с 0.02.
+      const d = x - mu - Math.round(x - mu);
+      return Math.exp(-(d * d) / (2 * sd * sd));
+    };
+    const hip = (f: number) => (10 + 20 * Math.cos(2 * Math.PI * f) + 3 * Math.sin(2 * Math.PI * f)) * deg;
+    const knee = (f: number) => (4 + 14 * g(f, 0.15, 0.06) + 56 * g(f, 0.72, 0.1)) * deg;
+    const ankle = (f: number) => (-6 * g(f, 0.07, 0.035) + 10 * g(f, 0.45, 0.1) - 20 * g(f, 0.63, 0.05)) * deg;
+
+    const fR = (t / T) % 1;
+    const phases: Record<Side, number> = { R: fR, L: (fR + 0.5) % 1 };
+    const raise = (v: THREE.Vector3, a: number) =>
+      // Поднять носок на угол a (поворот вокруг поперечной оси).
+      new THREE.Vector3(v.x, v.y * Math.cos(a) + v.z * Math.sin(a), v.z * Math.cos(a) - v.y * Math.sin(a)).normalize();
+
+    for (const side of ['L', 'R'] as Side[]) {
+      const f = phases[side];
+      const h = hip(f);
+      const shin = h - knee(f);
+      const foot = raise(this.restDir(`foot.${side}`, `toe3-1.${side}`), shin + ankle(f));
+      aims.push(...this.leg(side, this.down(side, h, 0.045), this.down(side, shin, 0.03), foot));
+      // Рука идёт вперёд вместе с противоположной ногой; локоть сгибается сильнее на махе вперёд.
+      const other = phases[side === 'L' ? 'R' : 'L'];
+      const swing = 0.55 * (hip(other) - 10 * deg);
+      const elbow = (18 + 14 * Math.max(0, Math.sin(2 * Math.PI * other + 0.3))) * deg;
+      aims.push(...this.arms(side, this.down(side, swing, 0.17), this.down(side, swing + elbow, 0.14)));
+    }
+
+    // Таз: поворот вокруг вертикали (вперёд идёт бедро шагающей ноги) и наклон на сторону переноса.
+    const w = 2 * Math.PI * fR;
+    const yaw = 4 * deg * Math.cos(w) * this.left;
+    const list = 3 * deg * Math.sin(2 * w) * this.left;
+    const pelvis = new THREE.Quaternion().setFromEuler(new THREE.Euler(2 * deg, yaw, list, 'YXZ'));
+    local.set(this.boneIndex('root'), pelvis);
+    // Грудная клетка поворачивается навстречу тазу: плечи против бёдер.
+    const counter = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, -yaw * 0.9, -list * 0.6, 'YXZ'));
+    local.set(this.boneIndex('spine03'), counter);
   }
 
   /** Высота сустава в осях манекена (без масштаба группы). */

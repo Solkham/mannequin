@@ -1,0 +1,7 @@
+name = "mannequin-photo"
+main = "index.js"
+compatibility_date = "2026-10-01"
+
+[vars]
+# С каких сайтов принимать запросы (через запятую).
+ALLOWED_ORIGINS = "https://solkham.github.io,http://localhost:5173,http://localhost:4173"

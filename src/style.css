@@ -87,3 +87,8 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
 .uploads { display: flex; flex-wrap: wrap; gap: 8px; }
 .upload.second { background: var(--card); color: var(--accent); }
 .chip.show { font-weight: 600; }
+/* «Фото в этой вещи» */
+.primary { width: 100%; border: 0; border-radius: 999px; padding: 11px 18px; background: var(--accent); color: #fff; font-weight: 600; font-size: 15px; }
+.primary:disabled { opacity: 0.6; cursor: progress; }
+.shoot .hint { margin-top: 8px; }
+#shoot-out img { display: block; width: 100%; margin-top: 12px; border-radius: 12px; }

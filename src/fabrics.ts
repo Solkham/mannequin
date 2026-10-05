@@ -23,6 +23,97 @@ export function fabricTexture(fabric: Fabric): { texture: THREE.Texture; tile: n
   return hit;
 }
 
+/**
+ * Рельеф плетения: серая плитка высот, из неё шейдер делает нормали (bump), а
+ * поверхность — блеск или лак. Масштаб свой: даже у гладкой ткани есть нить.
+ */
+export interface Finish {
+  relief: THREE.Texture;
+  /** Размер плитки рельефа на теле, м. */
+  tile: number;
+  /** Глубина рельефа, м: высота нити или подушки стёжки. */
+  depth: number;
+  roughness: number;
+  /** Ворс/блеск трикотажа и вискозы (sheen), 0 — нет. */
+  sheen: number;
+  /** Лак пуховика (clearcoat), 0 — нет. */
+  clearcoat: number;
+}
+
+const FINISH: Record<Fabric, Omit<Finish, 'relief'>> = {
+  plain: { tile: 0.006, depth: 0.0002, roughness: 0.85, sheen: 0.15, clearcoat: 0 },
+  knit: { tile: 0.012, depth: 0.0006, roughness: 0.9, sheen: 0.45, clearcoat: 0 },
+  stripes: { tile: 0.008, depth: 0.0004, roughness: 0.88, sheen: 0.35, clearcoat: 0 },
+  denim: { tile: 0.01, depth: 0.0005, roughness: 0.96, sheen: 0, clearcoat: 0 },
+  quilt: { tile: 0.13, depth: 0.004, roughness: 0.55, sheen: 0, clearcoat: 0.3 },
+  floral: { tile: 0.006, depth: 0.00015, roughness: 0.62, sheen: 0.5, clearcoat: 0 },
+  plaid: { tile: 0.01, depth: 0.0004, roughness: 0.9, sheen: 0.25, clearcoat: 0 },
+  oxford: { tile: 0.008, depth: 0.0004, roughness: 0.82, sheen: 0.1, clearcoat: 0 },
+};
+
+const finishes = new Map<Fabric, Finish>();
+
+export function fabricFinish(fabric: Fabric): Finish {
+  let hit = finishes.get(fabric);
+  if (!hit) {
+    const relief = new THREE.CanvasTexture(drawRelief(fabric));
+    relief.wrapS = relief.wrapT = THREE.RepeatWrapping;
+    relief.anisotropy = 4;
+    hit = { relief, ...FINISH[fabric] };
+    finishes.set(fabric, hit);
+  }
+  return hit;
+}
+
+/** Высота нити в точке плитки (u, v ∈ [0, 1)) по типу плетения. */
+function drawRelief(fabric: Fabric): HTMLCanvasElement {
+  const S = 128;
+  const c = document.createElement('canvas');
+  c.width = c.height = S;
+  const g = c.getContext('2d')!;
+  const img = g.createImageData(S, S);
+  const rand = rng(11 + fabric.length);
+  const jitter = new Float32Array(S * S).map(() => rand());
+  const TAU = Math.PI * 2;
+  for (let y = 0; y < S; y++) {
+    for (let x = 0; x < S; x++) {
+      const u = x / S, v = y / S;
+      let h: number;
+      if (fabric === 'knit' || fabric === 'stripes') {
+        // Трикотаж: столбики петель-«ёлочек».
+        const n = fabric === 'knit' ? 8 : 6;
+        const cu = (u * n) % 1, cv = (v * n * 1.4) % 1;
+        h = Math.sin(Math.PI * cu) * (0.7 + 0.3 * Math.sin(TAU * (cv + Math.abs(cu - 0.5))));
+      } else if (fabric === 'denim' || fabric === 'plaid') {
+        // Саржа: косые рубчики.
+        const n = fabric === 'denim' ? 10 : 7;
+        h = 0.5 + 0.5 * Math.sin(TAU * n * (u + v));
+      } else if (fabric === 'quilt') {
+        // Секция пуховика: подушка между швами.
+        h = Math.pow(Math.sin(Math.PI * v), 0.5);
+      } else if (fabric === 'oxford') {
+        // Рогожка: пары нитей в шахматку.
+        const n = 8;
+        const cu = (u * n) % 1, cv = (v * n) % 1;
+        const odd = (Math.floor(u * n) + Math.floor(v * n)) % 2;
+        h = odd ? Math.sin(Math.PI * cu) : Math.sin(Math.PI * cv);
+      } else {
+        // Полотно: нити вверх-вниз через одну.
+        const n = 8;
+        const odd = (Math.floor(u * n) + Math.floor(v * n)) % 2;
+        h = 0.5 + 0.5 * (odd ? Math.sin(Math.PI * ((u * n) % 1)) : Math.sin(Math.PI * ((v * n) % 1)));
+      }
+      // Неровность нити; у стёжки пуховика поверхность гладкая.
+      if (fabric !== 'quilt') h = h * 0.88 + jitter[y * S + x] * 0.12;
+      const i = (y * S + x) * 4;
+      img.data[i] = img.data[i + 1] = img.data[i + 2] = Math.round(255 * Math.min(1, Math.max(0, h)));
+      img.data[i + 3] = 255;
+    }
+  }
+  g.putImageData(img, 0, 0);
+  return c;
+}
+
 /** Детерминированный шум: одинаковая ткань при каждой загрузке. */
 function rng(seed: number): () => number {
   let s = seed;

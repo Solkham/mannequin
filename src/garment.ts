@@ -14,7 +14,7 @@ import * as THREE from 'three';
 import { convexHull, type Figure, type Ring } from './body.ts';
 import type { Rig } from './rig.ts';
 import type { Category, Fabric, SizeFit } from './sizing.ts';
-import { fabricTexture } from './fabrics.ts';
+import { fabricFinish, fabricTexture } from './fabrics.ts';
 import { Cloth, type Capsule, type ClothEnv, type Profile, type SkirtDesign, type Vec3 } from './cloth.ts';
 
 /** Части тела из экспорта (anny-meta.json, partNames). */
@@ -86,7 +86,7 @@ const DRAPE: Record<Category, {
     elbow: 0, knee: 0.008, hip: 0.005, bump: [0, 0.6, 0.4], stack: 0.5,
   },
   tee: {
-    torso: { taper: 0.3, depth: 0.35, folds: 9, rib: null },
+    torso: { taper: 0.3, depth: 0.2, folds: 7, rib: null },
     sleeve: { taper: 0.8, depth: 0.25, folds: 3, rib: null },
     leg: null, elbow: 0, knee: 0, hip: 0.006, bump: [0, 0, 0.3], stack: 0,
   },
@@ -115,7 +115,7 @@ const DRAPE: Record<Category, {
 
 /** Где кончается верх вещи (доля роста от линии бёдер вниз). */
 // Ниже 3% роста под линией бёдер начинается промежность: оболочка там обтянула бы каждое бедро отдельно.
-const TORSO_HEM: Partial<Record<Category, number>> = { top: 0.012, tee: 0, shirt: 0.03, tunic: 0.03, outer: 0.03, dress: 0.03 };
+const TORSO_HEM: Partial<Record<Category, number>> = { top: 0.012, tee: 0, shirt: 0.03, tunic: 0.03, outer: 0.03, dress: 0.02 };
 
 /**
  * Юбка: откуда висит (линия бёдер у платья и куртки, талия у юбки), подол (доля роста от пола),
@@ -182,6 +182,10 @@ export class Garment {
     uColor: { value: new THREE.Color() },
     uFabric: { value: null as THREE.Texture | null },
     uFabricScale: { value: 30 },
+    uRelief: { value: null as THREE.Texture | null },
+    uReliefScale: { value: 100 },
+    uReliefDepth: { value: 0 },
+    uSkirtTop: { value: 1e3 },
     uPrint: { value: null as THREE.Texture | null },
     uPrintRect: { value: new THREE.Vector4(0, 1, 0.2, 0.2) },
     uHasPrint: { value: 0 },
@@ -194,8 +198,8 @@ export class Garment {
     uBumpAmp: { value: new THREE.Vector3() },
     uStack: { value: 0 },
   };
-  private readonly material: THREE.MeshStandardMaterial;
-  private readonly clothMaterial: THREE.MeshStandardMaterial;
+  private readonly material: THREE.MeshPhysicalMaterial;
+  private readonly clothMaterial: THREE.MeshPhysicalMaterial;
   private shell: THREE.SkinnedMesh;
   private covered: Uint8Array;
   private levels: Levels | null = null;
@@ -286,7 +290,19 @@ export class Garment {
     const fab = fabricTexture(look.fabric);
     this.uniforms.uFabric.value = fab.texture;
     this.uniforms.uFabricScale.value = 1 / fab.tile;
-    for (const m of [this.material, this.clothMaterial]) m.roughness = look.fabric === 'quilt' ? 0.45 : 0.85;
+    const fin = fabricFinish(look.fabric);
+    this.uniforms.uRelief.value = fin.relief;
+    this.uniforms.uReliefScale.value = 1 / fin.tile;
+    this.uniforms.uReliefDepth.value = fin.depth;
+    for (const m of [this.material, this.clothMaterial]) {
+      // Поверхность ткани: трикотаж и вискоза с мягким ворсом, пуховик под лаком, деним матовый.
+      m.roughness = fin.roughness;
+      m.sheen = fin.sheen;
+      m.sheenRoughness = 0.55;
+      m.sheenColor.set(look.color).lerp(new THREE.Color(1, 1, 1), 0.5);
+      m.clearcoat = fin.clearcoat;
+      m.clearcoatRoughness = 0.35;
+    }
     const old = this.uniforms.uPrint.value;
     if (look.print) {
       const tex = new THREE.CanvasTexture(look.print.image as HTMLCanvasElement);
@@ -447,7 +463,7 @@ export class Garment {
         out.copy(a).add(b).add(c).toArray(p, j);
       }
     }
-    cloth.settle(this.env(around), 60);
+    cloth.settle(this.env(around), 90);
     this.wake = true;
   }
 
@@ -1219,12 +1235,14 @@ export class Garment {
     for (let i = 0; i < COLS; i++) {
       const a = (i / COLS) * Math.PI * 2;
       const own = rayHull(hull, Math.cos(a), Math.sin(a)) + gap;
-      // По поверхности верха пришиваем только низ куртки: у неё верх толстый и пышный.
-      // Рубашке, тунике, платью и юбке хватает обхвата бёдер с запасом — иначе на стыке ступенька.
-      const rad = shellHull && (this.category === 'outer' || this.category === 'top') ? Math.max(own, rayHull(shellHull, Math.cos(a), Math.sin(a)) + 0.002) : own;
+      // По поверхности верха пришиваем низ куртки (верх толстый и пышный) и юбку платья:
+      // она чуть шире лифа и прячет его край, шов сходится без ступеньки.
+      // Рубашке, тунике и юбке хватает обхвата бёдер с запасом.
+      const rad = shellHull && (this.category === 'outer' || this.category === 'top' || this.category === 'dress') ? Math.max(own, rayHull(shellHull, Math.cos(a), Math.sin(a)) + 0.002) : own;
       top.set([cx + Math.cos(a) * rad, topY, cz + Math.sin(a) * rad], i * 3);
     }
     this.skirtTop = top;
+    this.uniforms.uSkirtTop.value = topY;
     // Кости для каждой точки пояса юбки — как у ближайшей вершины лифа.
     {
       const bodyGeo = r.meshes[0].geometry;
@@ -1451,8 +1469,8 @@ export class Garment {
   }
 
   /** cloth=true — материал юбки: ткань из симуляции, рисунок по крою (aRest), без кожи под ней. */
-  private makeMaterial(cloth: boolean): THREE.MeshStandardMaterial {
-    const m = new THREE.MeshStandardMaterial({
+  private makeMaterial(cloth: boolean): THREE.MeshPhysicalMaterial {
+    const m = new THREE.MeshPhysicalMaterial({
       color: 0xffffff,
       roughness: 0.85,
       side: THREE.DoubleSide,
@@ -1522,6 +1540,10 @@ vAxisView = normalize(normalMatrix * axisObj + vec3(1e-6));`);
 uniform vec3 uColor;
 uniform sampler2D uFabric;
 uniform float uFabricScale;
+uniform sampler2D uRelief;
+uniform float uReliefScale;
+uniform float uReliefDepth;
+uniform float uSkirtTop;
 uniform sampler2D uPrint;
 uniform vec4 uPrintRect;
 uniform float uHasPrint;
@@ -1555,6 +1577,9 @@ if (uHasBack > 0.5 && vRestN.z < 0.0) {
   }
 }
 col = mix(col, vTint.rgb, vTint.a * uTintOn);
+${cloth ? `// Шов по верху юбки: строчка и тень от подгиба — стык с лифом читается как шов, а не ступенька.
+float seamD = uSkirtTop - vRest.y;
+col *= 1.0 - 0.22 * (1.0 - smoothstep(0.0015, 0.007, seamD)) + 0.06 * (1.0 - smoothstep(0.0, 0.0012, abs(seamD - 0.0035)));` : ''}
 diffuseColor.rgb *= col;`);
       if (!cloth) {
         fs = fs.replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
@@ -1578,12 +1603,33 @@ diffuseColor.rgb *= col;`);
   normal = normalize(normal - vAxisView * g);
 }`);
       }
+      fs = fs.replace('#include <emissivemap_fragment>', `${RELIEF}
+#include <emissivemap_fragment>`);
       shader.fragmentShader = fs;
     };
-    m.customProgramCacheKey = () => (cloth ? 'garment-cloth-v4' : 'garment-shell-v4');
+    m.customProgramCacheKey = () => (cloth ? 'garment-cloth-v5' : 'garment-shell-v5');
     return m;
   }
 }
+
+const RELIEF = `
+// Рельеф плетения: высоты из плитки (по трём плоскостям, как рисунок), наклон нормали
+// по экранным производным высоты. Издалека, когда плитка мельче пары пикселей, рельеф
+// гасим: иначе вместо ткани рябь.
+{
+  float tilesPerPx = length(fwidth(vRest)) * uReliefScale;
+  float near = 1.0 - smoothstep(0.08, 0.35, tilesPerPx);
+  vec3 ra = abs(normalize(vRestN));
+  ra /= (ra.x + ra.y + ra.z + 1e-4);
+  float h = (texture2D(uRelief, vRest.xy * uReliefScale).r * ra.z
+           + texture2D(uRelief, vRest.zy * uReliefScale).r * ra.x
+           + texture2D(uRelief, vRest.xz * uReliefScale).r * ra.y) * uReliefDepth * near;
+  vec3 sx = dFdx(-vViewPosition), sy = dFdy(-vViewPosition);
+  vec3 r1 = cross(sy, normal), r2 = cross(normal, sx);
+  float det = dot(sx, r1) * faceDirection;
+  vec3 grad = sign(det) * (dFdx(h) * r1 + dFdy(h) * r2);
+  normal = normalize(abs(det) * normal - grad);
+}`;
 
 /** Откуда ткань начинает свисать: верх груди. Выше (плечи, ключицы) она лежит на теле. */
 function tubeTop(L: Levels): number {

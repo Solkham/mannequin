@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { RINGS, type BodyData, type Fit, type Ring } from './body.ts';
 import { Rig, type Pose } from './rig.ts';
 import type { Surroundings } from './garment.ts';
@@ -16,7 +17,25 @@ export type StagePose = Pose | 'show';
 const SHOW = { distance: 3.2, speed: 1.05, pause: 0.6, turnHalf: 2.2, holdBack: 1.2, holdFront: 1.0 };
 export type { Pose };
 
-const SKIN = 0xe4dbcd;
+/**
+ * Оттенки дерева манекена (решение владельца: деревянный манекен без лица) —
+ * под разные оттенки кожи, от светлого к тёмному.
+ */
+export const SKIN_TONES = [
+  { name: 'берёза', hex: '#e6cda4' },
+  { name: 'светлое дерево', hex: '#c9a178' },
+  { name: 'дуб', hex: '#a77b50' },
+  { name: 'орех', hex: '#7a5236' },
+  { name: 'венге', hex: '#4a3226' },
+];
+/** Швы сборки манекена: на шее, плечах и запястьях, как у витринных манекенов. */
+const SEAMS = [
+  { joint: 'neck01', to: 'head', radius: 0.085 },
+  { joint: 'upperarm01.L', to: 'lowerarm01.L', radius: 0.075 },
+  { joint: 'upperarm01.R', to: 'lowerarm01.R', radius: 0.075 },
+  { joint: 'wrist.L', to: 'lowerarm01.L', radius: 0.05 },
+  { joint: 'wrist.R', to: 'lowerarm01.R', radius: 0.05 },
+] as const;
 const RING_COLOR = 0x2f4a3a;
 // Цвета зон те же, что в интерфейсе (--ok, --warn, --bad).
 export const TONE_COLOR = { ok: 0x2e7d4f, warn: 0xc98a1b, bad: 0xb3372c } as const;
@@ -43,6 +62,127 @@ function toFloat3(a: THREE.BufferAttribute | THREE.InterleavedBufferAttribute): 
   return out;
 }
 
+/**
+ * Голова без лица: вершины головы (и глаз) плавно переносим на гладкое «яйцо», как у
+ * витринного манекена: нос, губы, глазницы и уши исчезают. Яйцо подбирается по черепу:
+ * высота — от подбородка до макушки, ширина и глубина — по своду черепа (без ушей и носа).
+ * У шеи переход плавный по весу кости головы. Нормали пересчитываются.
+ */
+function makeFaceless(mesh: THREE.SkinnedMesh): void {
+  const geo = mesh.geometry;
+  const pos = geo.getAttribute('position') as THREE.BufferAttribute;
+  const p = pos.array as Float32Array;
+  const si = geo.getAttribute('skinIndex');
+  const sw = geo.getAttribute('skinWeight');
+  const names = mesh.skeleton.bones.map((b) => b.name);
+  const headBones = ['head', 'eye.L', 'eye.R'].map((n) => names.indexOf(THREE.PropertyBinding.sanitizeNodeName(n)));
+  const n = pos.count;
+  const w = new Float32Array(n);
+  for (let v = 0; v < n; v++) {
+    for (let k = 0; k < 4; k++) if (headBones.includes(si.getComponent(v, k))) w[v] += sw.getComponent(v, k);
+  }
+  // Свод черепа: вершины, почти целиком на кости головы.
+  let top = -Infinity, chin = Infinity, cx = 0, cnt = 0;
+  for (let v = 0; v < n; v++) {
+    if (w[v] < 0.95) continue;
+    top = Math.max(top, p[v * 3 + 1]);
+    chin = Math.min(chin, p[v * 3 + 1]);
+    cx += p[v * 3];
+    cnt++;
+  }
+  cx /= cnt || 1;
+  const cy = (top + chin) / 2;
+  const ry = (top - chin) / 2;
+  // Ширина и глубина — выше ушей и бровей (там нет ни ушей, ни носа).
+  const xs: number[] = [];
+  let zf = -Infinity, zb = Infinity;
+  for (let v = 0; v < n; v++) {
+    if (w[v] < 0.95) continue;
+    const y = p[v * 3 + 1];
+    if (y > cy + 0.35 * ry) {
+      xs.push(Math.abs(p[v * 3] - cx));
+      zf = Math.max(zf, p[v * 3 + 2]);
+      zb = Math.min(zb, p[v * 3 + 2]);
+    }
+  }
+  xs.sort((a, b) => a - b);
+  const rx = (xs[Math.floor(xs.length * 0.98)] ?? 0.075) * 1.04;
+  const cz = (zf + zb) / 2 + 0.006;
+  const rz = (zf - zb) / 2 + 0.004;
+  const d = new THREE.Vector3();
+  for (let v = 0; v < n; v++) {
+    const k = THREE.MathUtils.smoothstep(w[v], 0.35, 0.9);
+    if (k <= 0) continue;
+    d.set((p[v * 3] - cx) / rx, (p[v * 3 + 1] - cy) / ry, (p[v * 3 + 2] - cz) / rz);
+    if (d.lengthSq() < 1e-8) d.set(0, 0, 1);
+    d.normalize();
+    // Яйцо: к подбородку чуть уже и мельче.
+    const taper = 1 - 0.16 * Math.max(0, -d.y) ** 1.5;
+    const tx = cx + d.x * rx * taper, ty = cy + d.y * ry, tz = cz + d.z * rz * taper;
+    p[v * 3] += (tx - p[v * 3]) * k;
+    p[v * 3 + 1] += (ty - p[v * 3 + 1]) * k;
+    p[v * 3 + 2] += (tz - p[v * 3 + 2]) * k;
+  }
+  pos.needsUpdate = true;
+  geo.computeVertexNormals();
+}
+
+/** Дерево и швы манекена в шейдере материала тела. */
+const woodUniforms = {
+  uSeamPos: { value: SEAMS.map(() => new THREE.Vector3()) },
+  uSeamAxis: { value: SEAMS.map(() => new THREE.Vector3(0, 1, 0)) },
+  uSeamRadius: { value: SEAMS.map((s) => s.radius) },
+};
+
+function woodMaterial(): THREE.MeshPhysicalMaterial {
+  // Лакированное дерево: под лаком тёплый матовый тон, сверху ровный блик лака.
+  const m = new THREE.MeshPhysicalMaterial({
+    color: 0xffffff, vertexColors: true, roughness: 0.5, metalness: 0,
+    clearcoat: 0.6, clearcoatRoughness: 0.25, specularIntensity: 0.45,
+  });
+  m.onBeforeCompile = (shader) => {
+    Object.assign(shader.uniforms, woodUniforms);
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', `#include <common>
+varying vec3 vWood;`)
+      .replace('#include <morphtarget_vertex>', `#include <morphtarget_vertex>
+vWood = transformed;`);
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>
+varying vec3 vWood;
+uniform vec3 uSeamPos[${SEAMS.length}];
+uniform vec3 uSeamAxis[${SEAMS.length}];
+uniform float uSeamRadius[${SEAMS.length}];
+float wHash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+float wNoise(vec3 p) {
+  vec3 i = floor(p), f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(mix(wHash(i), wHash(i + vec3(1,0,0)), f.x), mix(wHash(i + vec3(0,1,0)), wHash(i + vec3(1,1,0)), f.x), f.y),
+             mix(mix(wHash(i + vec3(0,0,1)), wHash(i + vec3(1,0,1)), f.x), mix(wHash(i + vec3(0,1,1)), wHash(i + vec3(1,1,1)), f.x), f.y), f.z);
+}`)
+      .replace('#include <color_fragment>', `#include <color_fragment>
+{
+  // Волокна вдоль тела: тонкие, вытянуты по высоте. Колец нет — на голове они рисуют лицо.
+  // Под лаком дерево почти ровное, рисунок читается только вблизи.
+  vec3 q = vWood * vec3(140.0, 9.0, 140.0);
+  float fiber = wNoise(q) * 0.65 + wNoise(q * 2.7) * 0.35;
+  float flame = wNoise(vWood * vec3(22.0, 3.0, 22.0));
+  diffuseColor.rgb *= mix(0.95, 1.025, fiber) * mix(0.96, 1.02, flame);
+  // Швы сборки: тонкая тёмная линия там, где плоскость сустава пересекает деталь.
+  float seam = 0.0;
+  for (int i = 0; i < ${SEAMS.length}; i++) {
+    vec3 r = vWood - uSeamPos[i];
+    float along = dot(r, uSeamAxis[i]);
+    float radial = length(r - uSeamAxis[i] * along);
+    seam = max(seam, (1.0 - smoothstep(0.0012, 0.0028, abs(along))) * (1.0 - step(uSeamRadius[i], radial)));
+  }
+  diffuseColor.rgb *= 1.0 - 0.55 * seam;
+}`);
+  };
+  m.customProgramCacheKey = () => 'wood-mannequin-v3';
+  return m;
+}
+
 export async function loadBody(url: string): Promise<LoadedBody> {
   const gltf = await new GLTFLoader().loadAsync(url);
   let mesh: THREE.SkinnedMesh | undefined;
@@ -53,12 +193,11 @@ export async function loadBody(url: string): Promise<LoadedBody> {
   const geo = mesh.geometry;
   const dict = mesh.morphTargetDictionary ?? {};
   const names = Object.keys(dict).sort((a, b) => dict[a] - dict[b]);
-  // Цвет кожи и подсветка зон живут в цвете вершин, материал белый.
-  mesh.material = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.72, metalness: 0 });
-  const skin = new THREE.Color(SKIN);
-  const colors = new Float32Array(geo.attributes.position.count * 3);
-  for (let i = 0; i < colors.length; i += 3) colors.set([skin.r, skin.g, skin.b], i);
-  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  // Деревянный манекен без лица: оттенок дерева и подсветка зон — в цвете вершин,
+  // волокна, кольца и швы — в шейдере.
+  makeFaceless(mesh);
+  mesh.material = woodMaterial();
+  geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count * 3), 3));
   mesh.castShadow = true;
   mesh.removeFromParent();
   return {
@@ -110,20 +249,30 @@ export class Stage {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFShadowMap;
+    // Мягкие тени (дисперсионные карты): края тени размыты, как от студийного софтбокса.
+    this.renderer.shadowMap.type = THREE.VSMShadowMap;
     this.renderer.toneMapping = THREE.NeutralToneMapping;
     host.prepend(this.renderer.domElement);
 
-    this.scene.add(new THREE.HemisphereLight(0xfffaf2, 0xcfc4b2, 1.9));
-    const key = new THREE.DirectionalLight(0xffffff, 1.6);
+    // Студийное окружение: отражения и рассеянный свет со всех сторон, как в фотостудии.
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    this.scene.environmentIntensity = 0.55;
+    pmrem.dispose();
+
+    this.scene.add(new THREE.HemisphereLight(0xfffaf2, 0xcfc4b2, 0.9));
+    const key = new THREE.DirectionalLight(0xfff4e8, 2.1);
     key.position.set(1.2, 3, 2.2);
     key.castShadow = true;
     // Тень и на всей дорожке подиума.
     key.shadow.mapSize.set(2048, 2048);
     Object.assign(key.shadow.camera, { left: -3, right: 3, top: 3, bottom: -3, near: 0.5, far: 12 });
-    key.shadow.bias = -0.0005;
+    key.shadow.bias = -0.0004;
+    key.shadow.radius = 7;
+    key.shadow.blurSamples = 16;
     this.scene.add(key, key.target);
-    const rim = new THREE.DirectionalLight(0xfff3e0, 0.7);
+    // Контровой холодный свет сзади-сбоку: отделяет силуэт от фона.
+    const rim = new THREE.DirectionalLight(0xe8f0ff, 1.1);
     rim.position.set(-2, 2.5, -2);
     this.scene.add(rim);
 
@@ -221,10 +370,11 @@ export class Stage {
     this.paint();
   }
 
-  /** Одета ли вещь: тогда линии замера не рисуем поверх ткани. */
+  /** Одета ли вещь: тогда линии замера не рисуем поверх ткани, а зоны красит ткань. */
   setDressed(on: boolean): void {
     this.dressed = on;
     this.syncRingVisibility();
+    this.paint();
   }
 
   /** Линии замера видны там, где нет вердикта, только раздетым и только когда манекен стоит. */
@@ -232,14 +382,23 @@ export class Stage {
     for (const r of RINGS) this.rings.get(r)!.visible = !this.zones[r] && this.pose === 'stand' && !this.dressed;
   }
 
+  private skinTone = SKIN_TONES[1].hex;
+
+  setSkinTone(hex: string): void {
+    this.skinTone = hex;
+    this.paint();
+  }
+
   private paint(): void {
     const body = this.rig?.meshes[0];
     if (!body || !this.weights) return;
     const attr = body.geometry.getAttribute('color') as THREE.BufferAttribute;
     const c = attr.array as Float32Array;
-    const skin = new THREE.Color(SKIN);
+    const skin = new THREE.Color(this.skinTone);
+    // На одетом манекене зоны подсвечивает ткань: открытое дерево (ноги под короткой
+    // футболкой) не красим.
     const tones = RINGS.map((r) => {
-      const z = this.zones[r];
+      const z = this.dressed ? undefined : this.zones[r];
       return z ? { w: this.weights![r], color: new THREE.Color(TONE_COLOR[z.tone]) } : null;
     });
     for (let v = 0; v < attr.count; v++) {
@@ -264,6 +423,10 @@ export class Stage {
     if (!rig) return;
     this.fit = fit;
     rig.setShape(fit.influences, this.names);
+    SEAMS.forEach((seam, i) => {
+      const at = rig.head(seam.joint, woodUniforms.uSeamPos.value[i]);
+      rig.head(seam.to, woodUniforms.uSeamAxis.value[i]).sub(at).normalize();
+    });
     for (const m of rig.meshes) {
       const inf = m.morphTargetInfluences;
       if (inf) for (let i = 0; i < inf.length; i++) inf[i] = fit.influences[i];
@@ -303,6 +466,25 @@ export class Stage {
     this.syncRingVisibility();
     this.place(0);
     this.onPose?.();
+  }
+
+  get currentPose(): StagePose {
+    return this.pose;
+  }
+
+  /** Кадр сцены как картинка (JPEG data URL) — для «Фото в этой вещи». */
+  snapshot(): string {
+    // Холст прозрачный: подкладываем светлый фон студии, иначе в JPEG он станет чёрным.
+    this.renderer.render(this.scene, this.camera);
+    const src = this.renderer.domElement;
+    const out = document.createElement('canvas');
+    out.width = src.width;
+    out.height = src.height;
+    const g = out.getContext('2d')!;
+    g.fillStyle = '#efe9df';
+    g.fillRect(0, 0, out.width, out.height);
+    g.drawImage(src, 0, 0);
+    return out.toDataURL('image/jpeg', 0.9);
   }
 
   setView(view: View): void {
