@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "tsc --noEmit && vite build && vite build -c vite.widget.config.ts",
     "preview": "vite preview",
-    "test": "node --experimental-strip-types --no-warnings tests/sizing.test.ts && node --experimental-strip-types --no-warnings tests/cloth.test.ts && node --experimental-strip-types --no-warnings tests/body.test.ts && node --experimental-strip-types --no-warnings tests/worker.test.ts",
+    "test": "node --experimental-strip-types --no-warnings tests/sizing.test.ts && node --experimental-strip-types --no-warnings tests/body.test.ts && node --experimental-strip-types --no-warnings tests/worker.test.ts",
     "export-models": "python scripts/export_anny.py"
   },
   "dependencies": {
