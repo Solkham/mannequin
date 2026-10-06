@@ -7,7 +7,6 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { RINGS, type BodyData, type Fit, type Ring } from './body.ts';
 import { Rig, type Pose } from './rig.ts';
-import type { Surroundings } from './garment.ts';
 
 export type View = 'front' | 'back' | 'left' | 'right';
 /** Позы сцены: позы скелета плюс «показ» — проход по подиуму к зрителю и поворот. */
@@ -38,6 +37,12 @@ const SEAMS = [
 ] as const;
 const RING_COLOR = 0x2f4a3a;
 // Цвета зон те же, что в интерфейсе (--ok, --warn, --bad).
+/** Пол и сиденье вокруг манекена. */
+export interface Surroundings {
+  floorY: number;
+  seat: { center: THREE.Vector3; r: number } | null;
+}
+
 export const TONE_COLOR = { ok: 0x2e7d4f, warn: 0xc98a1b, bad: 0xb3372c } as const;
 // Насколько сильно зона перекрашивает кожу в центре пояса.
 const TINT = 0.7;

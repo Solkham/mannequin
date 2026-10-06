@@ -1,4 +1,4 @@
-// Проверка прокси «Фото в этой вещи» (worker/index.js) без сети: сервис генерации подменён.
+// Проверка прокси примерки (worker/index.js) без сети: сервис fal.ai подменён.
 // Запуск: npm test
 
 // @ts-expect-error — воркер на JS, типов нет
@@ -19,23 +19,36 @@ globalThis.fetch = (async (url: string, init: RequestInit) => {
 
 const post = (body: unknown, origin = SITE) =>
   new Request('https://w.example/', { method: 'POST', headers: { origin, 'content-type': 'application/json' }, body: JSON.stringify(body) });
-const good = { image: 'data:image/jpeg;base64,AAAA', prompt: 'a person' };
-
-let r = await worker.fetch(post(good), {});
-check('без ключа — просит подключить сервис', r.status === 503 && (await r.json()).error === 'Подключите сервис генерации');
-
+const IMG = 'data:image/jpeg;base64,AAAA';
+const WB = 'https://basket-01.wbbasket.ru/vol1/part1/1/images/big/1.webp';
 const env = { FAL_KEY: 'secret-key' };
-r = await worker.fetch(post(good, 'https://evil.example'), env);
+
+let r = await worker.fetch(post({ action: 'tryon', person: IMG, garment: WB }), {});
+check('без ключа — просит подключить сервис', r.status === 503 && (await r.json()).error === 'Подключите сервис примерки');
+r = await worker.fetch(post({ action: 'tryon', person: IMG, garment: WB }, 'https://evil.example'), env);
 check('чужой сайт не пускаем', r.status === 403);
-r = await worker.fetch(post({ image: 'https://x/y.jpg', prompt: 'p' }), env);
-check('нужен снимок, а не ссылка', r.status === 400);
+r = await worker.fetch(post({ action: 'tryon', person: IMG, garment: 'javascript:alert(1)' }), env);
+check('вещь — только картинка или https', r.status === 400);
+r = await worker.fetch(post({ action: 'tryon', person: IMG, garment: WB, category: 'hats' }), env);
+check('неизвестный тип вещи', r.status === 400);
+r = await worker.fetch(post({ action: 'rm -rf' }), env);
+check('неизвестное действие', r.status === 400);
 r = await worker.fetch(new Request('https://w.example/', { method: 'OPTIONS', headers: { origin: SITE } }), env);
 check('CORS для сайта', r.headers.get('access-control-allow-origin') === SITE);
 
-r = await worker.fetch(post(good), env);
-const data = await r.json();
-check('отдаёт адрес картинки', r.status === 200 && data.url === 'https://cdn.example/photo.jpg', JSON.stringify(data));
-check('ключ уходит только сервису', calls.length === 1 && calls[0].auth === 'Key secret-key' && !JSON.stringify(data).includes('secret'));
-check('снимок и текст переданы', calls[0].body.image_url === good.image && calls[0].body.prompt === good.prompt);
+r = await worker.fetch(post({ action: 'tryon', person: IMG, garment: WB, category: 'tops' }), env);
+let data = await r.json();
+check('примерка: адрес картинки', r.status === 200 && data.url === 'https://cdn.example/photo.jpg', JSON.stringify(data));
+const t = calls.at(-1)!;
+check('примерка: FASHN, фото человека и товара', t.url.endsWith('fal-ai/fashn/tryon/v1.6') && t.body.model_image === IMG && t.body.garment_image === WB && t.body.category === 'tops');
+check('ключ уходит только сервису', t.auth === 'Key secret-key' && !JSON.stringify(data).includes('secret'));
+
+r = await worker.fetch(post({ action: 'avatar', body: IMG, prompt: 'p' }), env);
+data = await r.json();
+const a = calls.at(-1)!;
+check('аватар по фигуре: Kontext', r.status === 200 && a.url.endsWith('fal-ai/flux-pro/kontext') && a.body.image_url === IMG);
+await worker.fetch(post({ action: 'avatar', body: IMG, face: IMG, prompt: 'p' }), env);
+const f = calls.at(-1)!;
+check('аватар с лицом: две картинки', f.url.endsWith('kontext/max/multi') && Array.isArray(f.body.image_urls) && (f.body.image_urls as string[]).length === 2);
 
 if (fails) process.exit(1);
